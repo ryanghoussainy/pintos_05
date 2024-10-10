@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
-#include "threads/synch.h"
 #include "threads/thread.h"
   
 /* See [8254] for hardware details of the 8254 timer chip. */
@@ -24,11 +23,20 @@ static int64_t ticks;
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+/* List of sleeping threads. */
+struct list sleeping_thread_list;  
+
+/* Lock for list of sleeping threads. */
+struct lock sleeping_thread_list_lock;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
+static bool sort_sleeping_threads_by_wake_up_ticks (const struct list_elem *a, 
+                                                    const struct list_elem *b,
+                                                    void *aux UNUSED);
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -37,6 +45,8 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  list_init (&sleeping_thread_list);
+  lock_init(&sleeping_thread_list_lock);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -89,12 +99,33 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  struct sleeping_thread st;
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+
+  st.wake_at_ticks = start + ticks;
+  sema_init(&st.sema, 0);
+
+  enum intr_level old_level = intr_disable();
+
+  lock_acquire(&sleeping_thread_list_lock);
+  list_insert_ordered(&sleeping_thread_list, &st.elem, &sort_sleeping_threads_by_wake_up_ticks, NULL);
+  lock_release(&sleeping_thread_list_lock);
+
+  sema_down(&st.sema);
+
+  intr_set_level(old_level);
 }
+
+static bool sort_sleeping_threads_by_wake_up_ticks(const struct list_elem *a_,
+                                                   const struct list_elem *b_,
+                                                   void *aux UNUSED)
+  {
+    const struct sleeping_thread *a = list_entry (a_, struct sleeping_thread, elem);
+    const struct sleeping_thread *b = list_entry (b_, struct sleeping_thread, elem);
+    return a->wake_at_ticks < b->wake_at_ticks;
+  }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
    turned on. */
@@ -172,6 +203,20 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+
+  while (!list_empty(&sleeping_thread_list)) 
+  {
+    enum intr_level old_level = intr_disable(); 
+    struct sleeping_thread *st = list_entry(list_front(&sleeping_thread_list), struct sleeping_thread, elem);
+    if (st->wake_at_ticks > ticks) {
+      intr_set_level (old_level);
+      break;
+    }
+
+    list_pop_front(&sleeping_thread_list);
+    intr_set_level (old_level);
+    sema_up(&st->sema);
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
