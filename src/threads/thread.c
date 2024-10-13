@@ -70,6 +70,9 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static bool donated_priority_less(const struct list_elem *a_,
+                                  const struct list_elem *b_,
+                                  void *aux UNUSED);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -361,7 +364,38 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  struct thread *cur = thread_current();
+
+  // If no donations, return default priority
+  if (list_empty(&cur->donated_prirorities))
+  {
+    return cur->priority;
+  }
+  // Get highest donation
+  else
+  {
+    struct donated_priority *p = list_entry(list_max(&cur->donated_prirorities,
+                                                      donated_priority_less,
+                                                      NULL),
+                                             struct donated_priority,
+                                             elem);
+    return MAX(p->priority, cur->priority);
+  }
+}
+
+/* Donates the priority of the current thread to the thread t. */
+void
+thread_donate_priority(struct thread *t)
+{
+  struct thread *cur = thread_current();
+
+  if (cur->priority > t->priority)
+  {
+    struct donated_priority *p = malloc(sizeof(struct donated_priority));
+    p->donor = cur;
+    p->priority = cur->priority;
+    list_push_back(&t->donated_prirorities, &p->elem);
+  }
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -481,6 +515,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  list_init(&t->donated_prirorities);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -596,6 +631,16 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+/* Returns true if priority of a is less than priority of b. */
+static bool
+donated_priority_less(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED)
+{
+  const struct donated_priority *a = list_entry(a_, struct donated_priority, elem);
+  const struct donated_priority *b = list_entry(b_, struct donated_priority, elem);
+
+  return a->priority < b->priority;
 }
 
 /* Offset of `stack' member within `struct thread'.
