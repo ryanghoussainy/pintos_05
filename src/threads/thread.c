@@ -347,7 +347,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) {
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, thread_more, NULL);
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -531,10 +531,13 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
+  if (list_empty (&ready_list)) {
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  } else {
+    struct list_elem *e = list_pop_front(&ready_list);
+    struct thread *t = list_entry(e, struct thread, elem);
+    return t;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
