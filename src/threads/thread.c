@@ -15,6 +15,10 @@
 #include "userprog/process.h"
 #endif
 
+static bool thread_less(const struct list_elem *a_,
+                        const struct list_elem *b_,
+                        void *aux UNUSED);
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -146,8 +150,16 @@ thread_tick (void)
     kernel_ticks++;
 
   /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE)
-    intr_yield_on_return ();
+
+  int current_priority = thread_get_priority();
+  struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
+
+  if (max_priority_ready_thread->priority > current_priority){
+    intr_yield_on_return();
+  }
+
+  // if (++thread_ticks >= TIME_SLICE)
+  //   intr_yield_on_return ();
 }
 
 /* Prints thread statistics. */
@@ -326,8 +338,9 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
+  if (cur != idle_thread) {
     list_push_back (&ready_list, &cur->elem);
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -601,3 +614,13 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+static bool thread_less(const struct list_elem *a_,
+                        const struct list_elem *b_,
+                        void *aux UNUSED)
+{
+  const struct thread *thread_a = list_entry (a_, struct thread, elem);
+  const struct thread *thread_b = list_entry (b_, struct thread, elem);
+
+  return thread_a->priority < thread_b->priority;
+}
