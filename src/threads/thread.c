@@ -19,6 +19,10 @@ static bool thread_less(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED);
 
+static bool thread_more(const struct list_elem *a_,
+                        const struct list_elem *b_,
+                        void *aux UNUSED);
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -152,10 +156,14 @@ thread_tick (void)
   /* Enforce preemption. */
 
   int current_priority = thread_get_priority();
-  struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
+  struct list_elem *e = list_max(&ready_list, thread_less, NULL);
+  struct thread *max_priority_ready_thread = list_entry(e, struct thread, elem);
+
+  // printf("current_p: %d\n", current_priority);
+  // printf("max_ready: %d\n", max_priority_ready_thread->priority);
 
   if (max_priority_ready_thread->priority > current_priority){
-    intr_yield_on_return();
+    intr_yield_on_return ();
   }
 
   // if (++thread_ticks >= TIME_SLICE)
@@ -268,7 +276,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, thread_more, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -368,6 +376,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  list_sort(&ready_list, thread_more, NULL);
 }
 
 /* Returns the current thread's priority. */
@@ -623,4 +632,14 @@ static bool thread_less(const struct list_elem *a_,
   const struct thread *thread_b = list_entry (b_, struct thread, elem);
 
   return thread_a->priority < thread_b->priority;
+}
+
+static bool thread_more(const struct list_elem *a_,
+                        const struct list_elem *b_,
+                        void *aux UNUSED)
+{
+  const struct thread *thread_a = list_entry (a_, struct thread, elem);
+  const struct thread *thread_b = list_entry (b_, struct thread, elem);
+
+  return thread_a->priority > thread_b->priority;
 }

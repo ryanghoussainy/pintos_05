@@ -1,0 +1,57 @@
+   { // Copyright Kishan Sambhi <kss22@ic.ac.uk> 2024
+    // Released into the public domain in case students find it helpful for debugging
+    //
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Task 3",
+            "type": "gdb",
+            "request": "attach",
+            "executable": "${workspaceRoot}/src/vm/build/kernel.o",
+            "cwd": "${workspaceRoot}/src/vm",
+            "valuesFormatting": "parseText",
+            "target": "localhost:1234",
+            "remote": true,
+            "stopAtConnect": true,
+            // load pintos macros
+            "autorun": [
+                "source ${workspaceRoot}/src/misc/gdb-macros",
+                "loadusersymbols ${workspaceRoot}/src/examples/exit" // Change "exit" to whatever program you are testing
+            ]
+        },
+        {
+            "name": "Debug Task 2",
+            "type": "gdb",
+            "request": "attach",
+            "executable": "${workspaceRoot}/src/userprog/build/kernel.o",
+            "cwd": "${workspaceRoot}/src/userprog",
+            "valuesFormatting": "parseText",
+            "target": "localhost:1234",
+            "remote": true,
+            "stopAtConnect": true,
+            // load pintos macros
+            "autorun": [
+                "source ${workspaceRoot}/src/misc/gdb-macros",
+                "loadusersymbols ${workspaceRoot}/src/examples/exit" // Change "exit" to whatever program you are testing
+            ]
+        },
+        {
+            "name": "Debug Task 1",
+            "type": "gdb",
+            "request": "attach",
+            "executable": "${workspaceRoot}/src/threads/build/kernel.o",
+            "cwd": "${workspaceRoot}/src/threads",
+            "valuesFormatting": "parseText",
+            "target": "localhost:1234",
+            "remote": true,
+            "stopAtConnect": true,
+            // load pintos macros
+            "autorun": [
+                "source ${workspaceRoot}/src/misc/gdb-macros"
+            ]
+        },
+    ]
+}
