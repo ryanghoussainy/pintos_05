@@ -24,3 +24,5 @@
 *.nav
 *.toc
 
+#ignore VS code files
+.vscode
