@@ -149,21 +149,6 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  /* Enforce preemption. */
-
-  // int current_priority = thread_get_priority();
-  // struct list_elem *e = list_max(&ready_list, thread_less, NULL);
-  // struct thread *max_priority_ready_thread = list_entry(e, struct thread, elem);
-
-  // printf("current_p: %d\n", current_priority);
-  // printf("max_ready: %d\n", max_priority_ready_thread->priority);
-
-  // if (max_priority_ready_thread->priority > current_priority){
-  //   intr_yield_on_return ();
-  // }
-
-  // thread_ticks++;  
-
   /* Enforce preemption */
   int current_priority = thread_get_priority();
   if (!list_empty(&ready_list)) {
@@ -172,9 +157,6 @@ thread_tick (void)
       intr_yield_on_return();
     }
   }
-
-  // if (++thread_ticks >= TIME_SLICE)
-  //   intr_yield_on_return ();
 }
 
 /* Prints thread statistics. */
