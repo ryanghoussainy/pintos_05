@@ -15,10 +15,6 @@
 #include "userprog/process.h"
 #endif
 
-static bool thread_less(const struct list_elem *a_,
-                        const struct list_elem *b_,
-                        void *aux UNUSED);
-
 static bool thread_more(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED);
@@ -155,15 +151,26 @@ thread_tick (void)
 
   /* Enforce preemption. */
 
-  int current_priority = thread_get_priority();
-  struct list_elem *e = list_max(&ready_list, thread_less, NULL);
-  struct thread *max_priority_ready_thread = list_entry(e, struct thread, elem);
+  // int current_priority = thread_get_priority();
+  // struct list_elem *e = list_max(&ready_list, thread_less, NULL);
+  // struct thread *max_priority_ready_thread = list_entry(e, struct thread, elem);
 
   // printf("current_p: %d\n", current_priority);
   // printf("max_ready: %d\n", max_priority_ready_thread->priority);
 
-  if (max_priority_ready_thread->priority > current_priority){
-    intr_yield_on_return ();
+  // if (max_priority_ready_thread->priority > current_priority){
+  //   intr_yield_on_return ();
+  // }
+
+  // thread_ticks++;  
+
+  /* Enforce preemption */
+  int current_priority = thread_get_priority();
+  if (!list_empty(&ready_list)) {
+    struct thread *max_priority_ready_thread = list_entry(list_front(&ready_list), struct thread, elem);
+    if (max_priority_ready_thread->priority > current_priority) {
+      intr_yield_on_return();
+    }
   }
 
   // if (++thread_ticks >= TIME_SLICE)
@@ -239,6 +246,11 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  /* If the new thread has a higher priority than the current thread, yield. */
+  if (t->priority > thread_get_priority()) {
+    thread_yield();
+  }
 
   return tid;
 }
@@ -375,8 +387,17 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  int old_priority = thread_current ()->priority;
   thread_current ()->priority = new_priority;
   list_sort(&ready_list, thread_more, NULL);
+
+  if (new_priority < old_priority) {
+    if (!list_empty(&ready_list) && 
+        new_priority < list_entry(list_front(&ready_list), 
+          struct thread, elem)->priority) {
+      thread_yield();
+    }
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -626,16 +647,6 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
-
-static bool thread_less(const struct list_elem *a_,
-                        const struct list_elem *b_,
-                        void *aux UNUSED)
-{
-  const struct thread *thread_a = list_entry (a_, struct thread, elem);
-  const struct thread *thread_b = list_entry (b_, struct thread, elem);
-
-  return thread_a->priority < thread_b->priority;
-}
 
 static bool thread_more(const struct list_elem *a_,
                         const struct list_elem *b_,
