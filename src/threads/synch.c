@@ -210,7 +210,8 @@ lock_acquire (struct lock *lock)
 
   if (lock->holder != NULL && cur->priority > lock->holder->priority)
   {
-    thread_donate_priority(lock->holder);
+    struct donated_priority p;
+    thread_donate_priority(lock->holder, &p);
   }
 
   sema_down (&lock->semaphore);
@@ -252,8 +253,8 @@ lock_release (struct lock *lock)
 
   // Remove priority donation
   struct list_elem *e;
-  for (e = list_begin(&cur->donated_prirorities);
-       e != list_end(&cur->donated_prirorities);
+  for (e = list_begin(&cur->donated_priorities);
+       e != list_end(&cur->donated_priorities);
        e = list_next(e))
   {
     struct donated_priority *p = list_entry(e, struct donated_priority, elem);
