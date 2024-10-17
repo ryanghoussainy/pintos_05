@@ -74,6 +74,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static int thread_get_effective_priority(struct thread *t);
 static bool donated_priority_less(const struct list_elem *a_,
                                   const struct list_elem *b_,
                                   void *aux UNUSED);
@@ -389,33 +390,40 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  struct thread *cur = thread_current();
+  return thread_get_effective_priority(thread_current());
+}
 
+static int
+thread_get_effective_priority(struct thread *t)
+{
   // If no donations, return default priority
-  if (list_empty(&cur->donated_priorities))
+  if (list_empty(&t->donated_priorities))
   {
-    return cur->priority;
+    return t->priority;
   }
   // Get highest donation
   else
   {
-    struct donated_priority *p = list_entry(list_front(&cur->donated_priorities),
+    struct donated_priority *p = list_entry(list_max(&t->donated_priorities,
+                                                     donated_priority_less,
+                                                     NULL),
                                             struct donated_priority,
                                             elem);
-    return MAX(p->priority, cur->priority);
+    return MAX(p->priority, t->priority);
   }
 }
 
 /* Donates the priority of the current thread to the thread t. */
 void
-thread_donate_priority(struct thread *t, struct donated_priority *p)
+thread_donate_priority(struct thread *t, struct donated_priority *p, struct lock *lock)
 {
   struct thread *cur = thread_current();
 
   if (cur->priority > t->priority)
   {
     p->donor = cur;
-    p->priority = cur->priority;
+    p->priority = thread_get_priority();
+    p->lock = lock;
     list_insert_ordered(&t->donated_priorities, &p->elem, donated_priority_less, NULL);
   }
 }
@@ -676,8 +684,8 @@ static bool thread_more(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED)
 {
-  const struct thread *thread_a = list_entry (a_, struct thread, elem);
-  const struct thread *thread_b = list_entry (b_, struct thread, elem);
+  struct thread *thread_a = list_entry (a_, struct thread, elem);
+  struct thread *thread_b = list_entry (b_, struct thread, elem);
 
-  return thread_a->priority > thread_b->priority;
+  return thread_get_effective_priority(thread_a) > thread_get_effective_priority(thread_b);
 }
