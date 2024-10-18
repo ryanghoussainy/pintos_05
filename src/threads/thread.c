@@ -399,7 +399,7 @@ thread_get_priority (void)
   // Get highest donation
   else
   {
-    struct donated_pr/* Not yet implemented. */iority *p = list_entry(list_front(&cur->donated_priorities),
+    struct donated_priority *p = list_entry(list_front(&cur->donated_priorities),
                                             struct donated_priority,
                                             elem);
     return MAX(p->priority, cur->priority);
@@ -426,7 +426,7 @@ thread_calculate_priority(struct thread *t)
   int32_t maxPriority_fp = convert_to_fixed_point(PRI_MAX);
   int32_t recent_cpu = div_fixed_point_by_integer(t->recent_cpu, 4);
   int32_t nice_fp = convert_to_fixed_point(t->nice);
-  int32_t calculated_priority = sub_fixed_point(maxPriority, recent_cpu);
+  int32_t calculated_priority = sub_fixed_point(maxPriority_fp, recent_cpu);
   calculated_priority = sub_fixed_point(calculated_priority, mul_fixed_point_by_integer(nice_fp, 2));
   calculated_priority = convert_to_integer_nearest(calculated_priority);
   
@@ -446,7 +446,7 @@ thread_set_nice (int nice UNUSED)
   int old_priority = cur->priority;
   cur->nice = nice;
   
-  int new_priority = thread_calculate_priority(cur)
+  int new_priority = thread_calculate_priority(cur);
   thread_set_priority(new_priority);
 
   list_sort(&ready_list, thread_more, NULL);

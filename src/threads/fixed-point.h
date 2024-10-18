@@ -1,30 +1,31 @@
 #ifndef THREADS_FIXED_POINT_H
-#define THREADS_FIXED_POINT_H
 
 #include <stdint.h>
 
-# define p 17
-# define q 14
-# define f (1 << q)
+# define FP_P 17
+# define FP_Q 14
+# define FP_F (1 << FP_P)
 
-#define convert_to_fixed_point(n) (n * f)
+#define convert_to_fixed_point(n) (n * FP_F)
 
-#define convert_to_integer_zero(x) (x / f)
+#define convert_to_integer_zero(x) (x / FP_F)
 
-#define convert_to_integer_nearest(x) (x >= 0 ? (x + f / 2) / f : (x - f / 2) / f)
+#define convert_to_integer_nearest(x) (x >= 0 ? (x + FP_F / 2) / FP_F : (x - FP_F / 2) / FP_F)
 
 #define add_fixed_point(x, y) (x + y)
 
 #define sub_fixed_point(x, y) (x - y)
 
-#define add_fixed_point_to_integer(x, n) (x + n * f)
+#define add_fixed_point_to_integer(x, n) (x + n * FP_F)
 
-#define sub_integer_from_fixed_point(x, n) (x - n * f)
+#define sub_integer_from_fixed_point(x, n) (x - n * FP_F)
 
-#define mul_fixed_point(x, y) (((int64_t) x) * y / f)
+#define mul_fixed_point(x, y) (((int64_t) x) * y / FP_F)
 
 #define mul_fixed_point_by_integer(x, n) (x * n)
 
-#define div_fixed_point(x, y) (((int64_t) x) * f / y)
+#define div_fixed_point(x, y) (((int64_t) x) * FP_F / y)
 
 #define div_fixed_point_by_integer(x, n) (x / n)
+
+#endif
