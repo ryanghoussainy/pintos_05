@@ -399,7 +399,7 @@ thread_get_priority (void)
   // Get highest donation
   else
   {
-    struct donated_priority *p = list_entry(list_front(&cur->donated_priorities),
+    struct donated_pr/* Not yet implemented. */iority *p = list_entry(list_front(&cur->donated_priorities),
                                             struct donated_priority,
                                             elem);
     return MAX(p->priority, cur->priority);
@@ -424,15 +424,31 @@ thread_donate_priority(struct thread *t, struct donated_priority *p)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  struct thread *cur = thread_current();
+  int old_priority = cur->priority;
+  cur->nice = nice;
+  
+  int new_priority = thread_calculate_priority(cur)
+  thread_set_priority(new_priority);
+
+  list_sort(&ready_list, thread_more, NULL);
+
+  if (new_priority < old_priority) {
+    if (!list_empty(&ready_list) && 
+        new_priority < list_entry(list_front(&ready_list), 
+          struct thread, elem)->priority) {
+      thread_yield();
+    }
+  }
+
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  struct thread *cur = thread_current();
+  return cur->nice;
 }
 
 /* Returns 100 times the system load average. */
