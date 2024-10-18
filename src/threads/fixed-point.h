@@ -6,26 +6,28 @@
 # define FP_Q 14
 # define FP_F (1 << FP_P)
 
-#define convert_to_fixed_point(n) (n * FP_F)
+/* let x and y be fixed point numbers, and n be an integer */
 
-#define convert_to_integer_zero(x) (x / FP_F)
+#define convert_to_fixed_point(n) (n * FP_F)                                                   /* RET int32_t */
 
-#define convert_to_integer_nearest(x) (x >= 0 ? (x + FP_F / 2) / FP_F : (x - FP_F / 2) / FP_F)
+#define convert_to_integer_zero(x) (x / FP_F)                                                  /* RET int - truncation */
 
-#define add_fixed_point(x, y) (x + y)
+#define convert_to_integer_nearest(x) (x >= 0 ? (x + FP_F / 2) / FP_F : (x - FP_F / 2) / FP_F) /* RET int rounding */
 
-#define sub_fixed_point(x, y) (x - y)
+#define add_fixed_point(x, y) (x + y)                                                          /* RET int32_t */
 
-#define add_fixed_point_to_integer(x, n) (x + n * FP_F)
+#define sub_fixed_point(x, y) (x - y)                                                          /* RET int32_t */
 
-#define sub_integer_from_fixed_point(x, n) (x - n * FP_F)
+#define add_fixed_point_to_integer(x, n) (x + n * FP_F)                                        /* RET int32_t */
 
-#define mul_fixed_point(x, y) (((int64_t) x) * y / FP_F)
+#define sub_integer_from_fixed_point(x, n) (x - n * FP_F)                                      /* RET int32_t */
 
-#define mul_fixed_point_by_integer(x, n) (x * n)
+#define mul_fixed_point(x, y) (((int64_t) x) * y / FP_F)                                       /* RET int32_t */
 
-#define div_fixed_point(x, y) (((int64_t) x) * FP_F / y)
+#define mul_fixed_point_by_integer(x, n) (x * n)                                               /* RET int32_t */
 
-#define div_fixed_point_by_integer(x, n) (x / n)
+#define div_fixed_point(x, y) (((int64_t) x) * FP_F / y)                                       /* RET int32_t */
+
+#define div_fixed_point_by_integer(x, n) (x / n)                                               /* RET int32_t */
 
 #endif

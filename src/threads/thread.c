@@ -105,6 +105,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->recent_cpu = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -206,6 +207,12 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+  /* the parent will be the thread running when thread_create()
+     is called */
+  struct thread *t_parent = thread_current ();
+  /* HAVE A LOOK AND USE FP FUNCS */
+  t->nice = t_parent->nice;
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -481,8 +488,20 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  struct thread *cur = thread_current ();
+  int32_t fp_cur_recent_cpu = cur->recent_cpu;
+  return convert_to_integer_nearest(mul_fixed_point_by_integer(fp_cur_recent_cpu, 100));
+}
+
+/* used to recalculate the recent_cpu value of the specified thread */
+void
+thread_recalculate_recent_cpu (struct thread *t)
+{
+  int32_t ans_fp_numerator = mul_fixed_point_by_integer(load_avg, 2);
+  int32_t ans_fp_denominator = add_fixed_point_to_integer(mul_fixed_point_by_integer(load_avg, 2), 1);
+  int32_t ans_fp = div_fixed_point(ans_fp_numerator, ans_fp_denominator);
+  ans_fp = add_fixed_point_to_integer(mul_fixed_point(ans_fp, t->recent_cpu), t->nice);
+  t->recent_cpu = ans_fp;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
