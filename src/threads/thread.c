@@ -382,13 +382,14 @@ thread_set_priority (int new_priority)
   }
 }
 
-/* Returns the current thread's priority. */
+/* Returns the current thread's effective priority. */
 int
 thread_get_priority (void) 
 {
   return thread_get_effective_priority(thread_current());
 }
 
+/* Returns the effective priority of a thread T. */
 int
 thread_get_effective_priority(struct thread *t)
 {
@@ -421,7 +422,7 @@ thread_donate_priority(struct thread *t, struct donated_priority *p, struct lock
     p->priority = thread_get_priority();
     p->lock = lock;
 
-    list_insert_ordered(&t->donated_priorities, &p->elem, donated_priority_less, NULL);
+    list_push_back(&t->donated_priorities, &p->elem);
   }
 }
 
@@ -677,6 +678,7 @@ donated_priority_less(const struct list_elem *a_, const struct list_elem *b_, vo
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+/* Returns true if the priority of thread a is greater than the priority of thread b. */
 bool thread_more(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED)
