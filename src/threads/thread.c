@@ -446,7 +446,7 @@ thread_set_nice (int nice UNUSED)
   int old_priority = cur->priority;
   cur->nice = nice;
   
-  int new_priority = thread_calculate_priority(cur)
+  int new_priority = thread_calculate_priority(cur);
   thread_set_priority(new_priority);
 
   list_sort(&ready_list, thread_more, NULL);
