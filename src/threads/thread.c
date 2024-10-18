@@ -420,6 +420,24 @@ thread_donate_priority(struct thread *t, struct donated_priority *p)
   }
 }
 
+thread_calculate_priority(struct thread *t)
+{
+  /* Calculate priority*/
+  int32_t maxPriority_fp = convert_to_fixed_point(PRI_MAX);
+  int32_t recent_cpu = div_fixed_point_by_integer(t->recent_cpu, 4);
+  int32_t nice_fp = convert_to_fixed_point(t->nice);
+  int32_t calculated_priority = sub_fixed_point(maxPriority, recent_cpu);
+  calculated_priority = sub_fixed_point(calculated_priority, mul_fixed_point_by_integer(nice_fp, 2));
+  calculated_priority = convert_to_integer_nearest(calculated_priority);
+  
+  /* Adjust calculated priority to lie in the valid range PRI_MIN to PRI_MAX */
+  calculated_priority = MAX(PRI_MIN, calculated_priority);
+  calculated_priority = MIN(PRI_MAX, calculated_priority);
+
+  /* Set thread's priority to calculated priority */
+  t->priority = calculated_priority;
+}
+
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice UNUSED) 
