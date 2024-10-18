@@ -15,9 +15,6 @@
 #include "userprog/process.h"
 #endif
 
-static bool thread_more(const struct list_elem *a_,
-                        const struct list_elem *b_,
-                        void *aux UNUSED);
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -74,7 +71,6 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-static int thread_get_effective_priority(struct thread *t);
 static bool donated_priority_less(const struct list_elem *a_,
                                   const struct list_elem *b_,
                                   void *aux UNUSED);
@@ -156,7 +152,7 @@ thread_tick (void)
   /* Enforce preemption */
   int current_priority = thread_get_priority();
   if (!list_empty(&ready_list)) {
-    struct thread *max_priority_ready_thread = list_entry(list_front(&ready_list), struct thread, elem);
+    struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, donated_priority_less, NULL), struct thread, elem);
     if (max_priority_ready_thread->priority > current_priority) {
       intr_yield_on_return();
     }
@@ -393,7 +389,7 @@ thread_get_priority (void)
   return thread_get_effective_priority(thread_current());
 }
 
-static int
+int
 thread_get_effective_priority(struct thread *t)
 {
   // If no donations, return default priority
@@ -424,6 +420,7 @@ thread_donate_priority(struct thread *t, struct donated_priority *p, struct lock
     p->donor = cur;
     p->priority = thread_get_priority();
     p->lock = lock;
+
     list_insert_ordered(&t->donated_priorities, &p->elem, donated_priority_less, NULL);
   }
 }
@@ -680,7 +677,7 @@ donated_priority_less(const struct list_elem *a_, const struct list_elem *b_, vo
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-static bool thread_more(const struct list_elem *a_,
+bool thread_more(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED)
 {
