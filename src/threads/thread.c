@@ -63,6 +63,9 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-mlfqs". */
 bool thread_mlfqs;
 
+/* Load average for the system */
+static int32_t load_avg;
+
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
@@ -435,7 +438,7 @@ thread_calculate_priority(struct thread *t)
   int32_t nice_fp = convert_to_fixed_point(t->nice);
   int32_t calculated_priority = sub_fixed_point(maxPriority_fp, recent_cpu);
   calculated_priority = sub_fixed_point(calculated_priority, mul_fixed_point_by_integer(nice_fp, 2));
-  calculated_priority = convert_to_integer_nearest(calculated_priority);
+  calculated_priority = convert_to_integer_zero(calculated_priority);
   
   /* Adjust calculated priority to lie in the valid range PRI_MIN to PRI_MAX */
   calculated_priority = MAX(PRI_MIN, calculated_priority);
@@ -480,8 +483,23 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return convert_to_integer_nearest(mul_fixed_point_by_integer(load_avg, 100));
+}
+
+void
+thread_calculate_load_avg(void)
+{
+  int32_t load_avg_frac = div_fixed_point_by_integer(convert_to_fixed_point(59), 60);
+  int32_t ready_threads_frac = div_fixed_point_by_integer(convert_to_fixed_point(1), 60);
+  int ready_threads = list_size (&ready_list);
+
+  if (thread_current() != idle_thread)
+  {
+    ready_threads++;
+  }
+
+  load_avg = add_fixed_point(mul_fixed_point(load_avg_frac, load_avg), 
+                             mul_fixed_point_by_integer(ready_threads_frac, ready_threads));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
