@@ -205,14 +205,16 @@ lock_acquire (struct lock *lock)
 
   struct thread *cur = thread_current();
 
-  if (lock->holder != NULL && cur->priority > lock->holder->priority && lock->holder->lock != NULL)
+  cur->lock = lock;
+
+  if (lock->holder != NULL && cur->priority > lock->holder->priority)
   {
     thread_donate_priority(lock->holder);
   }
 
   sema_down (&lock->semaphore);
   lock->holder = cur;
-  cur->lock = lock;
+  cur->lock = NULL;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -258,11 +260,12 @@ lock_release (struct lock *lock)
     if (t->lock == lock)
     {
       list_remove(e);
+
+      break;
     }
   }
 
   lock->holder = NULL;
-  cur->lock = NULL;
   sema_up (&lock->semaphore);
 
   thread_yield();
