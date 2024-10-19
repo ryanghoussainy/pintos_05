@@ -71,9 +71,9 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-static bool donated_priority_less(const struct list_elem *a_,
-                                  const struct list_elem *b_,
-                                  void *aux UNUSED);
+static bool thread_less(const struct list_elem *a_,
+                        const struct list_elem *b_,
+                        void *aux UNUSED);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -152,8 +152,8 @@ thread_tick (void)
   /* Enforce preemption */
   int current_priority = thread_get_priority();
   if (!list_empty(&ready_list)) {
-    struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, donated_priority_less, NULL), struct thread, elem);
-    if (max_priority_ready_thread->priority > current_priority) {
+    struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
+    if (thread_get_effective_priority(max_priority_ready_thread) > current_priority) {
       intr_yield_on_return();
     }
   }
@@ -394,35 +394,29 @@ int
 thread_get_effective_priority(struct thread *t)
 {
   // If no donations, return default priority
-  if (list_empty(&t->donated_priorities))
+  if (list_empty(&t->donors))
   {
     return t->priority;
   }
   // Get highest donation
   else
   {
-    struct donated_priority *p = list_entry(list_max(&t->donated_priorities,
-                                                     donated_priority_less,
-                                                     NULL),
-                                            struct donated_priority,
-                                            elem);
-    return MAX(p->priority, t->priority);
+    struct thread *p = list_entry(list_max(&t->donors, thread_less, NULL),
+                                  struct thread,
+                                  donor_elem);
+    return MAX(thread_get_effective_priority(p), t->priority);
   }
 }
 
 /* Donates the priority of the current thread to the thread t. */
 void
-thread_donate_priority(struct thread *t, struct donated_priority *p, struct lock *lock)
+thread_donate_priority(struct thread *t)
 {
   struct thread *cur = thread_current();
 
-  if (cur->priority > t->priority)
+  if (thread_get_priority() > thread_get_effective_priority(t))
   {
-    p->donor = cur;
-    p->priority = thread_get_priority();
-    p->lock = lock;
-
-    list_push_back(&t->donated_priorities, &p->elem);
+    list_push_back(&t->donors, &cur->donor_elem);
   }
 }
 
@@ -543,7 +537,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  list_init(&t->donated_priorities);
+  list_init(&t->donors);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -664,22 +658,25 @@ allocate_tid (void)
   return tid;
 }
 
-/* Returns true if priority of a is less than priority of b. */
-static bool
-donated_priority_less(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED)
-{
-  const struct donated_priority *a = list_entry(a_, struct donated_priority, elem);
-  const struct donated_priority *b = list_entry(b_, struct donated_priority, elem);
-
-  return a->priority < b->priority;
-}
-
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+/* Returns true if the priority of thread a is less than the priority of thread b. */
+static bool
+thread_less(const struct list_elem *a_,
+                        const struct list_elem *b_,
+                        void *aux UNUSED)
+{
+  struct thread *thread_a = list_entry (a_, struct thread, elem);
+  struct thread *thread_b = list_entry (b_, struct thread, elem);
+
+  return thread_get_effective_priority(thread_a) < thread_get_effective_priority(thread_b);
+}
+
 /* Returns true if the priority of thread a is greater than the priority of thread b. */
-bool thread_more(const struct list_elem *a_,
+bool
+thread_more(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED)
 {
