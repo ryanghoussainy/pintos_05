@@ -377,14 +377,13 @@ thread_set_priority (int new_priority)
   cur->priority = new_priority;
 
 
-  /* If the new priority is lower than the old priority, and there is a thread with
-     a higher priority, yield. */
   if (new_priority < old_priority) {
+    /* If the new priority is lower than the old priority, and there is a thread with
+      a higher priority, yield. */
     if (!list_empty(&ready_list)) {
-      if (thread_get_priority() < thread_get_effective_priority(
-        list_entry(list_front(&ready_list), struct thread, elem))) {
-        
-        list_sort(&ready_list, thread_more, NULL);
+      list_sort(&ready_list, thread_more, NULL);
+      struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
+      if (thread_get_effective_priority(max_priority_ready_thread) > thread_get_priority()) {
         thread_yield();
       }
     }
@@ -419,18 +418,16 @@ thread_get_effective_priority(struct thread *t)
   }
 }
 
-/* Donates the priority of the current thread to the thread t. */
+/* Donates the priority of thread t to the lock holder. */
 void
 thread_donate_priority(struct thread *t, struct donated_priority *p, struct lock *lock)
 {
-  struct thread *cur = thread_current();
-
-  if (cur->priority > t->priority)
+  if (t->priority > lock->holder->priority)
   {
-    p->donor = cur;
+    p->donor = t;
     p->lock = lock;
 
-    list_insert_ordered(&t->donated_priorities, &p->elem, donated_priority_less, NULL);
+    list_insert_ordered(&lock->holder->donated_priorities, &p->elem, donated_priority_less, NULL);
   }
 }
 
