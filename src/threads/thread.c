@@ -371,15 +371,22 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  int old_priority = thread_current ()->priority;
-  thread_current ()->priority = new_priority;
-  list_sort(&ready_list, thread_more, NULL);
+  struct thread *cur = thread_current();
 
+  int old_priority = cur->priority;
+  cur->priority = new_priority;
+
+
+  /* If the new priority is lower than the old priority, and there is a thread with
+     a higher priority, yield. */
   if (new_priority < old_priority) {
-    if (!list_empty(&ready_list) && 
-        new_priority < list_entry(list_front(&ready_list), 
-          struct thread, elem)->priority) {
-      thread_yield();
+    if (!list_empty(&ready_list)) {
+      if (thread_get_priority() < thread_get_effective_priority(
+        list_entry(list_front(&ready_list), struct thread, elem))) {
+        
+        list_sort(&ready_list, thread_more, NULL);
+        thread_yield();
+      }
     }
   }
 }
