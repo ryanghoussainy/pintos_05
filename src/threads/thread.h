@@ -26,6 +26,7 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 /* A kernel thread or user process.
 
@@ -148,9 +149,12 @@ int thread_get_priority (void);
 void thread_set_priority (int);
 void thread_donate_priority (struct thread *t, struct donated_priority *p);
 
+
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
+void thread_recalculate_recent_cpu (struct thread *t, void *aux UNUSED);
 int thread_get_load_avg (void);
+void thread_calculate_load_avg(void);
 
 #endif /* threads/thread.h */
