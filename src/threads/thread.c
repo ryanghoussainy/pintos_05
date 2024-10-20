@@ -679,7 +679,9 @@ donated_priority_less(const struct list_elem *a_, const struct list_elem *b_, vo
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-bool thread_more(const struct list_elem *a_,
+/* Returns true if priority of a is greater than priority of b. */
+bool
+thread_more(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED)
 {
@@ -689,6 +691,7 @@ bool thread_more(const struct list_elem *a_,
   return thread_get_effective_priority(thread_a) > thread_get_effective_priority(thread_b);
 }
 
+/* Returns true if priority of a is less than priority of b. */
 static bool
 thread_less(const struct list_elem *a_,
             const struct list_elem *b_,
