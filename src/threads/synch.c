@@ -32,7 +32,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-static bool cond_less(const struct list_elem *a_,
+static bool cond_more(const struct list_elem *a_,
                       const struct list_elem *b_,
                       void *aux UNUSED);
 
@@ -327,7 +327,7 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  list_insert_ordered(&cond->waiters, &waiter.elem, cond_less, NULL);
+  list_insert_ordered(&cond->waiters, &waiter.elem, cond_more, NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
@@ -350,7 +350,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty (&cond->waiters))
   { 
-    list_sort(&cond->waiters, cond_less, NULL); 
+    list_sort(&cond->waiters, cond_more, NULL); 
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
   }
@@ -372,7 +372,7 @@ cond_broadcast (struct condition *cond, struct lock *lock)
     cond_signal (cond, lock);
 };
 
-static bool cond_less(const struct list_elem *a_,
+static bool cond_more(const struct list_elem *a_,
                       const struct list_elem *b_,
                       void *aux UNUSED)
 {
@@ -382,5 +382,5 @@ static bool cond_less(const struct list_elem *a_,
   struct thread *thread_a = list_entry (list_front (&sema_elem_a->semaphore.waiters), struct thread, elem);
   struct thread *thread_b = list_entry (list_front (&sema_elem_b->semaphore.waiters), struct thread, elem);
 
-  return thread_get_effective_priority(thread_a) < thread_get_effective_priority(thread_b);
+  return thread_get_effective_priority(thread_a) > thread_get_effective_priority(thread_b);
 }
