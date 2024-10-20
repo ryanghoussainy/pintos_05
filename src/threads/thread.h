@@ -108,7 +108,6 @@ struct thread
 struct donated_priority
 {
   struct thread *donor;
-  int priority;
   struct lock *lock;
   struct list_elem elem;
 };
