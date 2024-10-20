@@ -245,8 +245,10 @@ thread_create (const char *name, int priority,
   t->nice = t_parent->nice;
   t->recent_cpu = 0;
 
-  thread_calculate_priority(t, NULL);
-
+  if (thread_mlfqs)
+  {
+    thread_calculate_priority(t, NULL);
+  }
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
@@ -463,7 +465,8 @@ thread_donate_priority(struct thread *t, struct donated_priority *p)
 void 
 thread_calculate_priority(struct thread *t, void *aux UNUSED)
 {
-  // ASSERT (thread_mlfqs);
+  ASSERT (thread_mlfqs);
+  
   /* Calculate priority*/
   int32_t maxPriority_fp = convert_to_fixed_point(PRI_MAX);
   int32_t recent_cpu = div_fixed_point_by_integer(t->recent_cpu, 4);
