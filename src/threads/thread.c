@@ -378,7 +378,6 @@ thread_set_priority (int new_priority)
     /* If the new priority is lower than the old priority, and there is a thread with
       a higher priority, yield. */
     if (!list_empty(&ready_list)) {
-      list_sort(&ready_list, thread_more, NULL);
       struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
       if (thread_get_effective_priority(max_priority_ready_thread) > thread_get_priority()) {
         thread_yield();
