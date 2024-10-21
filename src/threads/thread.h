@@ -95,7 +95,7 @@ struct thread
     struct list donated_priorities;     /* List of donated priorities. */
     struct list_elem allelem;           /* List element for all threads list. */
     int nice;                           /* Truncated 'Nice' value for BSD Scheduling */
-    int32_t recent_cpu;                 /* Truncated estimate of cpu time used recently */
+    int recent_cpu;                     /* Truncated estimate of cpu time used recently */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */

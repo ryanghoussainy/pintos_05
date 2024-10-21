@@ -468,10 +468,10 @@ thread_calculate_priority(struct thread *t, void *aux UNUSED)
   ASSERT (thread_mlfqs);
   
   /* Calculate priority*/
-  int32_t maxPriority_fp = convert_to_fixed_point(PRI_MAX);
-  int32_t recent_cpu = div_fixed_point_by_integer(t->recent_cpu, 4);
-  int32_t nice_fp = convert_to_fixed_point(t->nice);
-  int32_t calculated_priority = sub_fixed_point(maxPriority_fp, recent_cpu);
+  int maxPriority_fp = convert_to_fixed_point(PRI_MAX);
+  int recent_cpu = div_fixed_point_by_integer(t->recent_cpu, 4);
+  int nice_fp = convert_to_fixed_point(t->nice);
+  int calculated_priority = sub_fixed_point(maxPriority_fp, recent_cpu);
   calculated_priority = sub_fixed_point(calculated_priority, mul_fixed_point_by_integer(nice_fp, 2));
   calculated_priority = convert_to_integer_zero(calculated_priority);
   
@@ -534,8 +534,8 @@ thread_get_load_avg (void)
 void
 thread_calculate_load_avg(void)
 {
-  int32_t load_avg_frac = div_fixed_point_by_integer(convert_to_fixed_point(59), 60);
-  int32_t ready_threads_frac = div_fixed_point_by_integer(convert_to_fixed_point(1), 60);
+  int load_avg_frac = div_fixed_point_by_integer(convert_to_fixed_point(59), 60);
+  int ready_threads_frac = div_fixed_point_by_integer(convert_to_fixed_point(1), 60);
   int ready_threads = list_size (&ready_list);
 
   if (thread_current() != idle_thread)
@@ -552,18 +552,20 @@ int
 thread_get_recent_cpu (void) 
 {
   struct thread *cur = thread_current ();
-  int32_t fp_cur_recent_cpu = cur->recent_cpu;
-  return convert_to_integer_nearest(mul_fixed_point_by_integer(fp_cur_recent_cpu, 100));
+  int fp_cur_recent_cpu = cur->recent_cpu;
+  return convert_to_integer_nearest(fp_cur_recent_cpu) * 100;
 }
 
 /* used to recalculate the recent_cpu value of the specified thread */
 void
 thread_recalculate_recent_cpu (struct thread *t, void *aux UNUSED)
 {
-  int32_t ans_fp_numerator = mul_fixed_point_by_integer(load_avg, 2);
-  int32_t ans_fp_denominator = add_fixed_point_to_integer(mul_fixed_point_by_integer(load_avg, 2), 1);
-  int32_t ans_fp = div_fixed_point(ans_fp_numerator, ans_fp_denominator);
-  ans_fp = add_fixed_point_to_integer(mul_fixed_point(ans_fp, t->recent_cpu), t->nice);
+  int ans_fp_numerator = mul_fixed_point_by_integer(load_avg, 2);
+  int ans_fp_denominator = add_fixed_point_to_integer(mul_fixed_point_by_integer(load_avg, 2), 1);
+  int ans_fp = add_fixed_point_to_integer(
+    mul_fixed_point(
+      div_fixed_point(ans_fp_numerator, ans_fp_denominator), t->recent_cpu),
+      t->nice);
   t->recent_cpu = ans_fp;
 }
 
