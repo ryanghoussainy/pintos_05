@@ -71,9 +71,6 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-static bool donated_priority_less(const struct list_elem *a_,
-                                  const struct list_elem *b_,
-                                  void *aux UNUSED);
 static bool thread_less(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED);
@@ -397,38 +394,31 @@ thread_get_priority (void)
   return thread_get_effective_priority(thread_current());
 }
 
+/* Returns the effective priority of the thread t. */
 int
 thread_get_effective_priority(struct thread *t)
 {
-  // If no donations, return default priority
-  if (list_empty(&t->donated_priorities))
+  struct list_elem *e;
+  int out = t->priority;
+  for (e = list_begin(&t->locks); e != list_end(&t->locks); e = list_next(e))
   {
-    return t->priority;
-  }
-  // Get highest donation
-  else
-  {
-    struct donated_priority *p = list_entry(list_max(&t->donated_priorities,
-                                                     donated_priority_less,
-                                                     NULL),
-                                            struct donated_priority,
-                                            elem);
-    int out = MAX(thread_get_effective_priority(p->donor), t->priority);
-    return out;
-  }
-}
+    struct lock *lock = list_entry(e, struct lock, elem);
 
-/* Donates the priority of thread t to the lock holder. */
-void
-thread_donate_priority(struct thread *t, struct donated_priority *p, struct lock *lock)
-{
-  if (t->priority > lock->holder->priority)
-  {
-    p->donor = t;
-    p->lock = lock;
-
-    list_insert_ordered(&lock->holder->donated_priorities, &p->elem, donated_priority_less, NULL);
+    if (!list_empty(&lock->semaphore.waiters))
+    {
+      struct thread *waiter = list_entry(list_max(&lock->semaphore.waiters, thread_less, NULL),
+                                         struct thread,
+                                         elem);
+      
+      int waiter_priority = thread_get_effective_priority(waiter);
+      if (waiter_priority > out)
+      {
+        out = waiter_priority;
+      }
+    }
   }
+
+  return out;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -548,7 +538,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  list_init(&t->donated_priorities);
+  list_init(&t->locks);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -667,16 +657,6 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
-}
-
-/* Returns true if priority of a is less than priority of b. */
-static bool
-donated_priority_less(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED)
-{
-  const struct donated_priority *a = list_entry(a_, struct donated_priority, elem);
-  const struct donated_priority *b = list_entry(b_, struct donated_priority, elem);
-
-  return thread_get_effective_priority(a->donor) < thread_get_effective_priority(b->donor);
 }
 
 /* Offset of `stack' member within `struct thread'.
