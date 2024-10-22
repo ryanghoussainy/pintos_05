@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/fixed-point.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -25,6 +26,7 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 /* A kernel thread or user process.
 
@@ -92,6 +94,8 @@ struct thread
     int priority;                       /* Priority. */
     struct list locks;                  /* Locks held by the thread. */
     struct list_elem allelem;           /* List element for all threads list. */
+    int nice;                           /* Truncated 'Nice' value for BSD Scheduling */
+    int recent_cpu;                     /* Truncated estimate of cpu time used recently */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -137,12 +141,13 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 int thread_get_effective_priority(struct thread *t);
 void thread_set_priority (int);
-// void thread_donate_priority (struct thread *t, struct donated_priority *p, struct lock *lock);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
+void thread_recalculate_recent_cpu (struct thread *t, void *aux UNUSED);
 int thread_get_load_avg (void);
+void thread_calculate_load_avg(void);
 
 bool thread_more(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 
