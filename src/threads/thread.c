@@ -74,6 +74,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static void thread_set_priority_for_thread(struct thread *t, int new_priority);
 static bool thread_less(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED);
@@ -173,14 +174,13 @@ thread_tick (void)
     if (timer_ticks() % TIME_SLICE == 0)
     {
       thread_foreach(&thread_calculate_priority, NULL);
-      list_sort(&ready_list, thread_more, NULL);
     }
   }
 
   /* Enforce preemption */
   if (!list_empty(&ready_list)) {
     struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
-    if (max_priority_ready_thread != thread_current()) {
+    if (thread_get_effective_priority(max_priority_ready_thread) > thread_get_priority()) {
       intr_yield_on_return();
     }
   }
@@ -407,22 +407,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  struct thread *cur = thread_current();
-
-  int old_priority = cur->priority;
-  cur->priority = new_priority;
-
-
-  if (new_priority < old_priority) {
-    /* If the new priority is lower than the old priority, and there is a thread with
-      a higher priority, yield. */
-    if (!list_empty(&ready_list)) {
-      struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
-      if (thread_get_effective_priority(max_priority_ready_thread) > thread_get_priority()) {
-        thread_yield();
-      }
-    }
-  }
+  thread_set_priority_for_thread(thread_current(), new_priority);
 }
 
 /* Returns the current thread's priority. */
@@ -483,7 +468,7 @@ thread_calculate_priority(struct thread *t, void *aux UNUSED)
   calculated_priority = MIN(PRI_MAX, calculated_priority);
 
   /* Set thread's priority to calculated priority */
-  t->priority = calculated_priority;
+  thread_set_priority_for_thread(t, calculated_priority);
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -496,18 +481,6 @@ thread_set_nice (int nice)
   cur->nice = nice;
   
   thread_calculate_priority(cur, NULL);
-
-  list_sort(&ready_list, thread_more, NULL);
-
-  if (!list_empty(&ready_list))
-  {
-    struct thread * next = list_entry (list_max (&ready_list,
-                                       &thread_more, NULL),
-                                       struct thread, elem);
-    if(thread_current ()->priority < next->priority)
-      thread_yield ();
-  }
-
 }
 
 /* Returns the current thread's nice value. */
@@ -531,7 +504,10 @@ thread_calculate_load_avg(void)
 {
   int load_avg_frac = div_fixed_point_by_integer(convert_to_fixed_point(59), 60);
   int ready_threads_frac = div_fixed_point_by_integer(convert_to_fixed_point(1), 60);
+
+  enum intr_level old_level = intr_disable();
   int ready_threads = list_size (&ready_list);
+  intr_set_level(old_level);
 
   if (thread_current() != idle_thread)
   {
@@ -682,6 +658,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list)) {
     return idle_thread;
   } else {
+    list_sort(&ready_list, thread_more, NULL);
     struct list_elem *e = list_pop_front(&ready_list);
     struct thread *t = list_entry(e, struct thread, elem);
     return t;
@@ -771,6 +748,33 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+/* Sets the thread T's priority to NEW_PRIORITY */
+static void
+thread_set_priority_for_thread(struct thread *t, int new_priority)
+{
+  enum intr_level old_level = intr_disable();
+
+  int old_priority = t->priority;
+  t->priority = new_priority;
+
+  if (new_priority < old_priority) {
+    /* If the new priority is lower than the old priority, and there is a thread with
+      a higher priority, yield. */
+    if (!list_empty(&ready_list)) {
+      struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
+      if (thread_get_effective_priority(max_priority_ready_thread) > thread_get_priority()) {
+        if (intr_context()) {
+          intr_yield_on_return();
+        } else {
+          thread_yield();
+        }
+      }
+    }
+  }
+
+  intr_set_level(old_level);
+}
 
 /* Returns true if priority of a is greater than priority of b. */
 bool
