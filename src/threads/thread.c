@@ -179,7 +179,7 @@ thread_tick (void)
 
   /* Enforce preemption */
   if (!list_empty(&ready_list)) {
-    struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
+    struct thread *max_priority_ready_thread = list_entry(list_front(&ready_list), struct thread, elem);
     if (thread_get_effective_priority(max_priority_ready_thread) > thread_get_priority()) {
       intr_yield_on_return();
     }
@@ -658,7 +658,6 @@ next_thread_to_run (void)
   if (list_empty (&ready_list)) {
     return idle_thread;
   } else {
-    list_sort(&ready_list, thread_more, NULL);
     struct list_elem *e = list_pop_front(&ready_list);
     struct thread *t = list_entry(e, struct thread, elem);
     return t;
@@ -758,11 +757,13 @@ thread_set_priority_for_thread(struct thread *t, int new_priority)
   int old_priority = t->priority;
   t->priority = new_priority;
 
+  list_sort(&ready_list, thread_more, NULL);
+
   if (new_priority < old_priority) {
     /* If the new priority is lower than the old priority, and there is a thread with
       a higher priority, yield. */
     if (!list_empty(&ready_list)) {
-      struct thread *max_priority_ready_thread = list_entry(list_max(&ready_list, thread_less, NULL), struct thread, elem);
+      struct thread *max_priority_ready_thread = list_entry(list_front(&ready_list), struct thread, elem);
       if (thread_get_effective_priority(max_priority_ready_thread) > thread_get_priority()) {
         if (intr_context()) {
           intr_yield_on_return();
