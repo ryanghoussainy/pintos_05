@@ -149,6 +149,8 @@ void thread_recalculate_recent_cpu (struct thread *t, void *aux UNUSED);
 int thread_get_load_avg (void);
 void thread_calculate_load_avg(void);
 
+void sort_ready_list(void);
+
 bool thread_more(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 
 #endif /* threads/thread.h */

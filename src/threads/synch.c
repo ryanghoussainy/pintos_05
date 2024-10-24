@@ -73,6 +73,7 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       list_push_back(&sema->waiters, &thread_current ()->elem);
+      sort_ready_list();
       thread_block ();
     }
   sema->value--;
@@ -211,9 +212,15 @@ lock_acquire (struct lock *lock)
 
   struct thread *cur = thread_current();
 
+  enum intr_level old_level = intr_disable();
+
   sema_down (&lock->semaphore);
   lock->holder = cur;
+
   list_push_back(&cur->locks, &lock->elem);
+  sort_ready_list();
+
+  intr_set_level(old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -247,9 +254,15 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  enum intr_level old_level = intr_disable();
+
   lock->holder = NULL;
   list_remove(&lock->elem);
+
   sema_up (&lock->semaphore);
+  sort_ready_list();
+
+  intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false

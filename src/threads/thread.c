@@ -540,6 +540,13 @@ thread_recalculate_recent_cpu (struct thread *t, void *aux UNUSED)
   t->recent_cpu = ans_fp;
 }
 
+/* Sorts the ready list in descending order of priority. */
+void
+sort_ready_list(void)
+{
+  list_sort(&ready_list, thread_more, NULL);
+}
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -757,7 +764,7 @@ thread_set_priority_for_thread(struct thread *t, int new_priority)
   int old_priority = t->priority;
   t->priority = new_priority;
 
-  list_sort(&ready_list, thread_more, NULL);
+  sort_ready_list();
 
   if (new_priority < old_priority) {
     /* If the new priority is lower than the old priority, and there is a thread with
