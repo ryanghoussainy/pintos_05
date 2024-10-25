@@ -427,6 +427,8 @@ thread_get_effective_priority(struct thread *t)
     return out;
   }
 
+  enum intr_level old_level = intr_disable();
+
   /* Donations:
      For each lock that T holds, we will consider every waiting thread with a higher
      priority than T's a donor. */
@@ -448,6 +450,8 @@ thread_get_effective_priority(struct thread *t)
       }
     }
   }
+
+  intr_set_level(old_level);
 
   return out;
 }
