@@ -421,14 +421,17 @@ thread_get_priority (void)
 int
 thread_get_effective_priority(struct thread *t)
 {
+  int out = t->priority;
+
   if (thread_mlfqs)
   {
-    return t->priority;
+    return out;
   }
 
-  // Donations
+  /* Donations:
+     For each lock that T holds, we will consider every waiting thread with a higher
+     priority than T's a donor. */
   struct list_elem *e;
-  int out = t->priority;
   for (e = list_begin(&t->locks); e != list_end(&t->locks); e = list_next(e))
   {
     struct lock *lock = list_entry(e, struct lock, elem);
