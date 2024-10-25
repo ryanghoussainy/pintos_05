@@ -94,7 +94,7 @@ struct thread
     int priority;                       /* Priority. */
     struct list locks;                  /* Locks held by the thread. */
     struct list_elem allelem;           /* List element for all threads list. */
-    int nice;                           /* Truncated 'Nice' value for BSD Scheduling */
+    int nice;                           /* Truncated 'Nice' value for BSD scheduling */
     int recent_cpu;                     /* Truncated estimate of cpu time used recently */
 
     /* Shared between thread.c and synch.c. */

@@ -157,20 +157,20 @@ thread_tick (void)
 
   if (thread_mlfqs)
   {
-    /* Update recent_cpu for the current thread if not thread is not idle */
+    /* Update recent_cpu for the current thread if thread is not idle. */
     if (t != idle_thread) 
     {
       t->recent_cpu = add_fixed_point_to_integer(t->recent_cpu, 1);
     }
 
-    /* Update load_avg and recent_cpu for all threads every second */
+    /* Update load_avg and recent_cpu for all threads every second. */
     if (timer_ticks() % TIMER_FREQ == 0)
     {
       thread_calculate_load_avg();
       thread_foreach(&thread_recalculate_recent_cpu, NULL);
     }
 
-    /* Update priority for all threads every fourth tick */
+    /* Update priority for all threads every fourth tick. */
     if (timer_ticks() % TIME_SLICE == 0)
     {
       thread_foreach(&thread_calculate_priority, NULL);
@@ -231,10 +231,9 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  /* the parent will be the thread running when thread_create()
-     is called */
+  /* The parent will be the thread running when thread_create() is called */
   struct thread *t_parent = thread_current ();
-  /* HAVE A LOOK AND USE FP FUNCS */
+
   t->nice = t_parent->nice;
   t->recent_cpu = 0;
 
@@ -453,6 +452,7 @@ thread_get_effective_priority(struct thread *t)
   return out;
 }
 
+/* Calculates the priority of a thread in the advanced scheduler. */
 void 
 thread_calculate_priority(struct thread *t, void *aux UNUSED)
 {
@@ -502,6 +502,7 @@ thread_get_load_avg (void)
   return convert_to_integer_nearest(mul_fixed_point_by_integer(load_avg, 100));
 }
 
+/* Calculates the load_avg, the average number of threads ready to run over the past minute. */
 void
 thread_calculate_load_avg(void)
 {
@@ -530,7 +531,7 @@ thread_get_recent_cpu (void)
   return convert_to_integer_nearest(fp_cur_recent_cpu) * 100;
 }
 
-/* used to recalculate the recent_cpu value of the specified thread */
+/* Recalculates the recent_cpu value of the specified thread. */
 void
 thread_recalculate_recent_cpu (struct thread *t, void *aux UNUSED)
 {
