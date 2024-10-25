@@ -350,6 +350,14 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty (&cond->waiters))
   { 
+    // Ensure all semaphores' waiters are sorted by priority
+    struct list_elem *e;
+    for (e = list_begin(&cond->waiters); e != list_end(&cond->waiters); e = list_next(e))
+    {
+      struct semaphore_elem *sema_elem = list_entry(e, struct semaphore_elem, elem);
+      list_sort(&sema_elem->semaphore.waiters, thread_more, NULL);
+    }
+
     list_sort(&cond->waiters, cond_more, NULL); 
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
