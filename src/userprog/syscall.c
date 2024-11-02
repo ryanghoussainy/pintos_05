@@ -18,3 +18,16 @@ syscall_handler (struct intr_frame *f)
   printf ("system call number: %d\n", f->esp);
   thread_exit ();
 }
+
+/* Terminate this process. */
+void sys_exit (int status) {
+  /* Sets the exit status of the current thread. */
+  struct thread *cur = thread_current();
+  cur->exit_status = status;
+
+  /* Prints the process termination message. */
+  printf ("%s: exit(%d)\n", cur->name, status);
+
+  /* Terminates current thread. */
+  thread_exit();
+}
