@@ -61,17 +61,17 @@ start_process (void *command_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   /* Tokenise the command string */
-  char *args[4000];
-  int num_args = 0;
+  char *argv[4000];
+  int argc = 0;
   char *token, *save_ptr;
   for (token = strtok_r (command, " ", &save_ptr); token != NULL;
        token = strtok_r (NULL, " ", &save_ptr))
     {
-      args[num_args] = token;
-      num_args++;
+      argv[argc] = token;
+      argc++;
     }
 
-  success = load (args[0], &if_.eip, &if_.esp);
+  success = load (argv[0], &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (command);
