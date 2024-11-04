@@ -78,6 +78,9 @@ start_process (void *command_)
   if (!success) 
     thread_exit ();
 
+  /* Setup the stack */
+  setup_stack (if_.esp, argv, argc);
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -86,6 +89,52 @@ start_process (void *command_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+/* Setup the stack */
+static bool
+setup_stack (void *esp, char **argv, int argc) {
+  /* Push the arguments onto the stack */
+  for (int i = argc - 1; i >= 0; i--)
+    {
+      size_t len = strlen (argv[i]) + 1;
+
+      /* Increase stack size by length of argument */
+      esp -= len;
+
+      /* Copy the argument onto the stack */
+      strlcpy (esp, argv[i], len);
+
+      /* Make the argument pointer point to the address in the stack */
+      argv[i] = esp;
+    }
+
+  /* Word align */
+  esp = (uint8_t) esp & WORD_ALIGN_MASK;
+
+  /* Push null pointer sentinel */
+  esp -= sizeof (char *);
+  *((char **) esp) = NULL;
+
+  /* Push arguments' addresses */
+  for (int i = argc - 1; i >= 0; i--)
+    {
+      esp -= sizeof (char *);
+      *((char **) esp) = argv[i];
+    }
+  
+  /* Push argv */
+  char **argv_ptr = esp;
+  esp -= sizeof (char **);
+  *((char ***) esp) = argv_ptr;
+
+  /* Push argc */
+  esp -= sizeof (int);
+  *((int *) esp) = argc;
+
+  /* Push fake return address */
+  esp -= sizeof (void *);
+  *((void **) esp) = NULL;
 }
 
 /* Waits for thread TID to die and returns its exit status. 
