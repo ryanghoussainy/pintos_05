@@ -61,7 +61,7 @@ start_process (void *command_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   /* Tokenise the command string */
-  char *argv[4000];
+  char *argv[128];
   int argc = 0;
   char *token, *save_ptr;
   for (token = strtok_r (command, " ", &save_ptr); token != NULL;
