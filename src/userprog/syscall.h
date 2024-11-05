@@ -24,5 +24,8 @@ int sys_write (int fd, const void *buffer, unsigned size);
 bool sys_create (const char *file, unsigned initial_size);
 bool sys_remove (const char *file);
 int sys_open (const char *file);
+int sys_filesize (int fd);
+
+struct o_file *process_get_open_file_struct(int fd);
 
 #endif /* userprog/syscall.h */

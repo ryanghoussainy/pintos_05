@@ -158,3 +158,51 @@ int sys_open (const char *file) {
   /* Returns the file descriptor. */
   return cur_o_file->fd;
 }
+
+/* Returns the length, in bytes, of the file open as fd. */
+int sys_filesize (int fd) {
+  /* Acquires file lock to ensure synchronisation. */
+  lock_acquire(&file_lock);
+
+  /* Calls file_length() from filesys/file.c. */
+  struct o_file *opened_file = process_get_open_file_struct(fd);
+
+  /* Checks if file is NULL. */
+  if (opened_file == NULL) {
+    return -1;
+  }
+  int length = file_length(opened_file->file);
+
+  /* Releases file lock. */
+  lock_release(&file_lock);
+
+  /* Returns the length of the file. */
+  return length;
+}
+
+struct o_file *
+process_get_open_file_struct(int fd) {
+    /* Check if input fd is valid. */
+    if (fd < 2) {
+        return NULL;
+    }
+
+    struct thread *cur = thread_current();
+
+    /* Get the corresponding opened file from the hash map. */
+    struct o_file search_open_file;
+    search_open_file.fd = fd;
+
+    /* Find file in fd hash table. */
+    struct hash_elem *found_file_elem = hash_find(&cur->file_descriptors, &search_open_file.fd_elem);
+
+    // File not found, return NULL.
+    if (found_file_elem == NULL) {
+        return NULL;
+    }
+
+    // Else, return the file.
+    struct o_file *open_file = hash_entry(found_file_elem, struct o_file, fd_elem);
+  
+    return open_file;
+}
