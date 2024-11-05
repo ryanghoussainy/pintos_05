@@ -66,11 +66,19 @@ int sys_write (int fd, const void *buffer, unsigned size) {
     return size;
   }
 
-  /* writing to a file only up until EOF, by calculating remaining space */
-  int file_size = file_length(fd);
-  off_t file_offset = file_tell(fd);
-  rem_size = file_size - file_offset;
-  file_write (fd, buffer, rem_size);
+  /* writing to a file only up until EOF*/
+  lock_acquire(&file_lock);
+  struct file *opened_file = process_get_open_file_struct(fd)->file;
+
+  /* Checks if file is NULL. */
+  if (opened_file == NULL) {
+    return 0;
+  }
+
+  /* writes to file from current offset and return amount written */
+  off_t file_offset = file_tell(opened_file);
+  rem_size = file_write_at (opened_file, buffer, size, file_offset);
+  lock_release(&file_lock);
   return rem_size;
 }
 
