@@ -3,7 +3,7 @@
 
 #include "threads/thread.h"
 
-#define WORD_ALIGN_MASK 0xfffffffc
+#define WORD_ALIGN_MASK ~(0x3)
 
 tid_t process_execute (const char *command);
 int process_wait (tid_t);

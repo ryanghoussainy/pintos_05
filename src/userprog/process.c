@@ -19,7 +19,7 @@
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -71,15 +71,12 @@ start_process (void *command_)
       argc++;
     }
 
-  success = load (argv[0], &if_.eip, &if_.esp);
+  success = load (argv[0], &if_.eip, &if_.esp, argv, argc);
 
   /* If load failed, quit. */
   palloc_free_page (command);
   if (!success) 
     thread_exit ();
-
-  /* Setup the stack */
-  setup_stack (if_.esp, argv, argc);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -89,52 +86,6 @@ start_process (void *command_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
-}
-
-/* Setup the stack */
-static bool
-setup_stack (void *esp, char **argv, int argc) {
-  /* Push the arguments onto the stack */
-  for (int i = argc - 1; i >= 0; i--)
-    {
-      size_t len = strlen (argv[i]) + 1;
-
-      /* Increase stack size by length of argument */
-      esp -= len;
-
-      /* Copy the argument onto the stack */
-      strlcpy (esp, argv[i], len);
-
-      /* Make the argument pointer point to the address in the stack */
-      argv[i] = esp;
-    }
-
-  /* Word align */
-  esp = (uint8_t) esp & WORD_ALIGN_MASK;
-
-  /* Push null pointer sentinel */
-  esp -= sizeof (char *);
-  *((char **) esp) = NULL;
-
-  /* Push arguments' addresses */
-  for (int i = argc - 1; i >= 0; i--)
-    {
-      esp -= sizeof (char *);
-      *((char **) esp) = argv[i];
-    }
-  
-  /* Push argv */
-  char **argv_ptr = esp;
-  esp -= sizeof (char **);
-  *((char ***) esp) = argv_ptr;
-
-  /* Push argc */
-  esp -= sizeof (int);
-  *((int *) esp) = argc;
-
-  /* Push fake return address */
-  esp -= sizeof (void *);
-  *((void **) esp) = NULL;
 }
 
 /* Waits for thread TID to die and returns its exit status. 
@@ -257,7 +208,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char **argv, int argc);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -268,7 +219,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *file_name, void (**eip) (void), void **esp, char **argv, int argc) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -364,7 +315,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, argv, argc))
     goto done;
 
   /* Start address. */
@@ -503,7 +454,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char **argv, int argc) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -513,7 +464,49 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12;
+        {
+          /* Push the arguments onto the stack */
+          for (int i = argc - 1; i >= 0; i--)
+            {
+              size_t len = strlen (argv[i]) + 1;
+
+              /* Increase stack size by length of argument */
+              *esp -= len;
+
+              /* Copy the argument onto the stack */
+              strlcpy (*esp, argv[i], len);
+
+              /* Make the argument pointer point to the address in the stack */
+              argv[i] = *esp;
+            }
+
+          /* Word align */
+          *esp = (void *)((uintptr_t) *esp & WORD_ALIGN_MASK);
+
+          /* Push null pointer sentinel */
+          *esp -= sizeof (char *);
+          *((char **) *esp) = NULL;
+
+          /* Push arguments' addresses */
+          for (int i = argc - 1; i >= 0; i--)
+            {
+              *esp -= sizeof (char *);
+              *((char **) *esp) = argv[i];
+            }
+          
+          /* Push argv */
+          char **argv_ptr = *esp;
+          *esp -= sizeof (char **);
+          *((char ***) *esp) = argv_ptr;
+
+          /* Push argc */
+          *esp -= sizeof (int);
+          *((int *) *esp) = argc;
+
+          /* Push fake return address */
+          *esp -= sizeof (void *);
+          *((void **) *esp) = NULL;
+        }
       else
         palloc_free_page (kpage);
     }
