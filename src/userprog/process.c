@@ -17,9 +17,37 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+
+struct o_file *
+get_o_file_from_fd(int fd) {
+    /* Check if input fd is valid. */
+    if (fd < 2) {
+        return NULL;
+    }
+
+    struct thread *cur = thread_current();
+
+    /* Get the corresponding opened file from the hash map. */
+    struct o_file search_open_file;
+    search_open_file.fd = fd;
+
+    /* Find file in fd hash table. */
+    struct hash_elem *found_file_elem = hash_find(&cur->file_descriptors, &search_open_file.fd_elem);
+
+    // File not found, return NULL.
+    if (found_file_elem == NULL) {
+        return NULL;
+    }
+
+    // Else, return the file.
+    struct o_file *open_file = hash_entry(found_file_elem, struct o_file, fd_elem);
+  
+    return open_file;
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
