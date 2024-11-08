@@ -9,13 +9,13 @@
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
 #include "threads/switch.h"
-#include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "userprog/syscall.h"
 #include "lib/kernel/hash.h"
+#include "threads/malloc.h"
 #endif
 
 
@@ -70,7 +70,7 @@ static void kernel_thread (thread_func *, void *aux);
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
-static void init_thread (struct thread *, const char *name, int priority);
+static void init_thread (struct thread *, const char *name, int priority, struct thread *parent);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
@@ -106,7 +106,7 @@ thread_init (void)
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
-  init_thread (initial_thread, "main", PRI_DEFAULT);
+  init_thread (initial_thread, "main", PRI_DEFAULT, NULL);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 
@@ -232,7 +232,7 @@ thread_create (const char *name, int priority,
     return TID_ERROR;
 
   /* Initialize thread. */
-  init_thread (t, name, priority);
+  init_thread (t, name, priority, thread_current());
   tid = t->tid = allocate_tid ();
 
   /* The parent will be the thread running when thread_create() is called */
@@ -347,6 +347,22 @@ tid_t
 thread_tid (void) 
 {
   return thread_current ()->tid;
+}
+
+/* Gets the thread by its tid. */
+struct thread *
+get_thread_by_tid(tid_t tid)
+{
+  struct list_elem *e;
+  for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
+  {
+    struct thread *t = list_entry(e, struct thread, allelem);
+    if (t->tid == tid)
+    {
+      return t;
+    }
+  }
+  return NULL;
 }
 
 /* Deschedules the current thread and destroys it.  Never
@@ -559,6 +575,26 @@ sort_ready_list(void)
   list_sort(&ready_list, thread_more, NULL);
 }
 
+/* Creates a link between a parent thread and a child thread. */
+struct link *
+create_link(struct thread *parent, struct thread *child)
+{
+  /* Allocate memory for the link */
+  struct link *link = malloc(sizeof(struct link));
+  ASSERT (link != NULL);
+
+  link->parent = parent;
+  link->child = child;
+  
+  /* Initialise link's lock */
+  lock_init(&link->lock);
+
+  /* Initialise link's semaphore */
+  sema_init(&link->sema, 0);
+ 
+  return link;
+}
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -632,7 +668,7 @@ is_thread (struct thread *t)
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
-init_thread (struct thread *t, const char *name, int priority)
+init_thread (struct thread *t, const char *name, int priority, struct thread *parent)
 {
   enum intr_level old_level;
 
@@ -646,6 +682,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   list_init(&t->locks);
+
+#ifdef USERPROG
+  t->pLink = create_link(parent, t);
+  list_init(&t->cLinks);
+  t->waited_on = false;
+#endif
+
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();

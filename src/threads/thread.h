@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/fixed-point.h"
 #include "lib/kernel/hash.h"
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -104,6 +105,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct link *pLink;                 /* Link to parent link */
+    struct list cLinks;                 /* List of child links */
+    bool waited_on;                     /* Whether the thread has been waited on */
     int exit_status;                    /* Exit status of the thread */
     struct list files;                  /* List of files opened by the thread */
     struct hash file_descriptors;       /* List of file_descriptor structures */
@@ -113,6 +117,17 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+/* Link struct between parent thread and child thread */
+struct link
+{
+   struct thread *parent;                /* Parent thread */
+   struct thread *child;                 /* Child thread */
+   int exit_status;                      /* Exit status of the child thread */
+   struct lock lock;                     /* Lock for the whole structure */
+   struct semaphore sema;                /* Semaphore for the parent to wait on */
+   struct list_elem elem;                /* List element */
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -135,6 +150,7 @@ void thread_unblock (struct thread *);
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
+struct thread *get_thread_by_tid(tid_t tid);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
@@ -155,6 +171,8 @@ int thread_get_load_avg (void);
 void thread_calculate_load_avg(void);
 
 void sort_ready_list(void);
+
+struct link *create_link(struct thread *parent, struct thread *child);
 
 bool thread_more(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 unsigned fd_hash(const struct hash_elem *e, void *aux UNUSED);
