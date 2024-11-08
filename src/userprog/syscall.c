@@ -11,11 +11,14 @@
 #include "devices/input.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "userprog/pagedir.h"
 
 /* Lock used when handling files to ensure synchronisation. */
 static struct lock file_lock;
 
 static void syscall_handler (struct intr_frame *);
+
+static bool validate_user_pointer(const void *ptr);
 
 void
 syscall_init (void) 
@@ -27,6 +30,14 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   // printf ("system call number: %d\n", f->esp);
+
+  void *buffer = *(void **)(f->esp + 8);
+
+  if (!validate_user_pointer(f->esp) || !validate_user_pointer(buffer)) {
+    // Terminate process since the given pointer (user or stack) is invalid
+    sys_exit(-1);
+  }
+
   thread_exit ();
 }
 
@@ -72,19 +83,19 @@ sys_write (int fd, const void *buffer, unsigned size) {
     return size;
   }
 
-  /* Retrieves open file from fd. */
+  /* writing to a file only up until EOF*/
+  lock_acquire(&file_lock);
   struct o_file *opened_file = get_o_file_from_fd(fd);
 
   /* Checks if file is NULL. */
   if (opened_file == NULL) {
-    return -1;
+    return 0;
   }
 
-  /* writing to a file only up until EOF, by calculating remaining space */
-  int file_size = file_length(opened_file->file);
+  /* writes to file from current offset and return amount written */
   off_t file_offset = file_tell(opened_file->file);
-  rem_size = file_size - file_offset;
-  file_write (opened_file->file, buffer, rem_size);
+  rem_size = file_write_at (opened_file->file, buffer, size, file_offset);
+  lock_release(&file_lock);
   return rem_size;
 }
 
@@ -268,4 +279,27 @@ sys_close (int fd) {
 
         free(open_file);
     }
+}
+
+/*  Take in a user pointer and check that it is valid, i.e:
+  1. Is not NULL
+  2. Points to unmapped virtual memory
+  3. Points to kernel address space
+*/
+static bool
+validate_user_pointer(const void *uaddr) {
+
+  if (uaddr == NULL) {
+    return false;
+  }
+
+  if (!is_user_vaddr(uaddr)) {
+    return false;
+  }
+
+  if (pagedir_get_page(thread_current()->pagedir, uaddr) == NULL) {
+    return false;
+  }
+
+  return true;
 }
