@@ -106,7 +106,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     int exit_status;                    /* Exit status of the thread */
     struct list files;                  /* List of files opened by the thread */
-    struct hash file_descriptors;       /* List of file_descriptor structures */
+    struct hash *file_descriptors;      /* Pointer to hash table of file_descriptor structures */
     int next_fd;                        /* Tracks the next available fd number */
 #endif
 

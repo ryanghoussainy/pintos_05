@@ -16,6 +16,7 @@
 #include "userprog/process.h"
 #include "userprog/syscall.h"
 #include "lib/kernel/hash.h"
+#include "threads/malloc.h"
 #endif
 
 
@@ -109,9 +110,6 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-
-  hash_init(&initial_thread->file_descriptors, fd_hash, fd_less, NULL);
-  initial_thread->next_fd = 2;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -646,6 +644,16 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   list_init(&t->locks);
+
+#ifdef USERPROG
+  list_init(&t->files);
+  t->file_descriptors = malloc(sizeof(struct hash));
+  hash_init(t->file_descriptors, fd_hash, fd_less, NULL);
+  /* assertion until malloc failure is handled properly */
+  ASSERT (t->file_descriptors != NULL);
+  t->next_fd = 2;
+#endif
+
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -820,6 +828,7 @@ thread_less(const struct list_elem *a_,
   return thread_get_effective_priority(thread_a) < thread_get_effective_priority(thread_b);
 }
 
+#ifdef USERPROG
 /* Hash function for file descriptors, using the fd number */
 unsigned fd_hash(const struct hash_elem *e, void *aux UNUSED) {
   const struct o_file *fd_struct = hash_entry(e, struct o_file, fd_elem);
@@ -832,3 +841,4 @@ bool fd_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNU
   const struct o_file *fd_b = hash_entry(b, struct o_file, fd_elem);
   return fd_a->fd < fd_b->fd;
 }
+#endif

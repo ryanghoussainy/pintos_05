@@ -7,9 +7,11 @@
 #include "devices/shutdown.h"
 #include "threads/synch.h"
 #include "filesys/filesys.h"
+#include "threads/malloc.h"
+#include "devices/input.h"
 #include "threads/vaddr.h"
+#include "userprog/process.h"
 #include "userprog/pagedir.h"
-#include <stdlib.h> 
 
 /* Lock used when handling files to ensure synchronisation. */
 static struct lock file_lock;
@@ -33,6 +35,7 @@ syscall_handler (struct intr_frame *f)
 
   if (!validate_user_pointer(f->esp) || !validate_user_pointer(buffer)) {
     // Terminate process since the given pointer (user or stack) is invalid
+    process_exit();
     sys_exit(-1);
   }
 
@@ -40,13 +43,15 @@ syscall_handler (struct intr_frame *f)
 }
 
 /* Terminates PintOS. */
-void sys_halt (void) {
+void
+sys_halt (void) {
   /* Calls shutdown_power_off() from devices/shutdown.h. */
   shutdown_power_off();
 }
 
 /* Terminate this process. */
-void sys_exit (int status) {
+void 
+sys_exit (int status) {
   /* Sets the exit status of the current thread. */
   struct thread *cur = thread_current();
   cur->exit_status = status;
@@ -59,7 +64,8 @@ void sys_exit (int status) {
 }
 
 /* Writes bytes from buffer to the open file or console */
-int sys_write (int fd, const void *buffer, unsigned size) {
+int 
+sys_write (int fd, const void *buffer, unsigned size) {
   /* Writing to console and splitting buffer into defined chunks if needed */
   int rem_size;
   if (fd == 1){
@@ -80,7 +86,7 @@ int sys_write (int fd, const void *buffer, unsigned size) {
 
   /* writing to a file only up until EOF*/
   lock_acquire(&file_lock);
-  struct file *opened_file = process_get_open_file_struct(fd)->file;
+  struct o_file *opened_file = get_o_file_from_fd(fd);
 
   /* Checks if file is NULL. */
   if (opened_file == NULL) {
@@ -88,14 +94,15 @@ int sys_write (int fd, const void *buffer, unsigned size) {
   }
 
   /* writes to file from current offset and return amount written */
-  off_t file_offset = file_tell(opened_file);
-  rem_size = file_write_at (opened_file, buffer, size, file_offset);
+  off_t file_offset = file_tell(opened_file->file);
+  rem_size = file_write_at (opened_file->file, buffer, size, file_offset);
   lock_release(&file_lock);
   return rem_size;
 }
 
 /* Creates a new file with the given name and initial size. */
-bool sys_create (const char *file, unsigned initial_size) {
+bool 
+sys_create (const char *file, unsigned initial_size) {
   /* Checks if file is NULL. */
   if (file == NULL) {
     sys_exit(-1);
@@ -114,7 +121,9 @@ bool sys_create (const char *file, unsigned initial_size) {
   return success;
 }
 
-bool sys_remove (const char *file) {
+/* Removes the file with the given name. */
+bool 
+sys_remove (const char *file) {
   /* Checks if file is NULL. */
   if (file == NULL) 
   {
@@ -134,7 +143,9 @@ bool sys_remove (const char *file) {
   return success;
 }
 
-int sys_open (const char *file) {
+/* Opens the file with the given name. */
+int 
+sys_open (const char *file) {
 
   /* Checks if file is NULL. */
   if (file == NULL) 
@@ -170,7 +181,7 @@ int sys_open (const char *file) {
   cur_o_file->file = f;
 
   /* Inserts the file descriptor into the hash table of running process. */
-  hash_insert(&cur->file_descriptors, &cur_o_file->fd_elem);
+  hash_insert(cur->file_descriptors, &cur_o_file->fd_elem);
 
   /* Releases file lock. */
   lock_release(&file_lock);
@@ -180,12 +191,13 @@ int sys_open (const char *file) {
 }
 
 /* Returns the length, in bytes, of the file open as fd. */
-int sys_filesize (int fd) {
+int 
+sys_filesize (int fd) {
   /* Acquires file lock to ensure synchronisation. */
   lock_acquire(&file_lock);
 
   /* Calls file_length() from filesys/file.c. */
-  struct o_file *opened_file = process_get_open_file_struct(fd);
+  struct o_file *opened_file = get_o_file_from_fd(fd);
 
   /* Checks if file is NULL. */
   if (opened_file == NULL) {
@@ -200,31 +212,74 @@ int sys_filesize (int fd) {
   return length;
 }
 
-struct o_file *
-process_get_open_file_struct(int fd) {
-    /* Check if input fd is valid. */
-    if (fd < 2) {
-        return NULL;
+/* Reads size bytes from the file open as fd into buffer. */
+int 
+sys_read (int fd, void *buffer, unsigned size) {
+  /* Checks if buffer is valid. */
+  if (!is_user_vaddr(buffer) || buffer == NULL) {
+    sys_exit(-1);
+  }
+
+  if (fd == STDOUT_FILENO) {
+    /* Cannot read from stdout. */
+    return -1;
+  } else if (fd == STDIN_FILENO) {
+    /* Read from the keyboard into the buffer. */
+    unsigned i;
+    for (i = 0; i < size; i++) {
+        ((uint8_t *) buffer)[i] = input_getc();
     }
 
-    struct thread *cur = thread_current();
-
-    /* Get the corresponding opened file from the hash map. */
-    struct o_file search_open_file;
-    search_open_file.fd = fd;
-
-    /* Find file in fd hash table. */
-    struct hash_elem *found_file_elem = hash_find(&cur->file_descriptors, &search_open_file.fd_elem);
-
-    // File not found, return NULL.
-    if (found_file_elem == NULL) {
-        return NULL;
+    return size; 
+  } else {
+    struct o_file *opened_file = get_o_file_from_fd(fd);
+    
+    if (opened_file == NULL || opened_file->file == NULL) {
+      return -1;
     }
 
-    // Else, return the file.
-    struct o_file *open_file = hash_entry(found_file_elem, struct o_file, fd_elem);
-  
-    return open_file;
+    // Read from the file into the buffer, returning the bytes written.
+    return file_read(opened_file->file, buffer, size);
+  }
+}
+
+/* Changes the next byte to be read or written in open file fd to position. */
+void 
+sys_seek (int fd, unsigned position) {
+  /* Acquires opened file from fd. */
+    struct o_file *open_file = get_o_file_from_fd(fd);
+    if (open_file != NULL) {
+      /* If descriptor not null use file_seek(file, position). */
+        file_seek (open_file->file, position);
+    }
+}
+
+/* Returns the position of the next byte to be read or written in open file fd. */
+unsigned 
+sys_tell (int fd) {
+  /* Acquires opened file from fd. */
+    struct o_file *open_file = get_o_file_from_fd(fd);
+    if (open_file != NULL) {
+      /* If descriptor not null use file_tell(file). */
+        return file_tell (open_file->file);
+    }
+    return -1;
+}
+
+/* Closes file descriptor fd. */
+void 
+sys_close (int fd) {
+    struct o_file *open_file = get_o_file_from_fd(fd);
+
+    // If the file is found, close it
+    if (open_file != NULL) {
+        file_close (open_file->file);
+
+        // Remove the entry from the open_files hash table.
+        hash_delete (thread_current()->file_descriptors, &open_file->fd_elem);
+
+        free(open_file);
+    }
 }
 
 /*  Take in a user pointer and check that it is valid, i.e:
