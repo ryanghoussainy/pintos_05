@@ -6,6 +6,7 @@
 #define WORD_ALIGN_MASK ~(0x3)
 
 tid_t process_execute (const char *command);
+struct o_file *get_o_file_from_fd(int fd);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
