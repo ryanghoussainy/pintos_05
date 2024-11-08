@@ -17,9 +17,12 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
+static struct thread *valid_child_tid(tid_t child_tid);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -40,8 +43,18 @@ process_execute (const char *command)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (command, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR) {
     palloc_free_page (fn_copy); 
+  } else {
+    struct thread *parent = thread_current();
+    struct thread *child = get_thread_by_tid(tid);
+
+    /* Create a link between the parent and child thread */
+    struct link *link = create_link(parent, child);
+    
+    /* Push the link onto the parent's list of child links */
+    list_push_back(&parent->cLinks, &link->elem);
+  }
   return tid;
 }
 
@@ -100,8 +113,50 @@ start_process (void *command_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(1);
-  return -1;
+  /* Get child thread */
+  struct thread *child = valid_child_tid(child_tid);
+
+  /* If the child_tid is not a valid child of the current thread or 
+     we have already waited for this thread, return -1 */
+  if (child == NULL || child->waited_on)
+    return -1;
+
+  /* Wait for the child to exit */
+  sema_down(&child->pLink->sema);
+
+  /* Set the child's waited_on flag to true */
+  child->waited_on = true;
+
+  /* Get the exit status of the child */
+  int exit_status = child->exit_status;
+
+  /* Remove the link between the parent and child */
+  list_remove(&child->pLink->elem);
+
+  /* Free the link */
+  free(child->pLink);
+
+  return exit_status;
+}
+
+/* Returns the child thread if it is valid, otherwise NULL. */
+static struct thread *
+valid_child_tid(tid_t child_tid)
+{
+  struct thread *parent = thread_current();
+  
+  /* Iterate through the parent's list of child links. */
+  struct list_elem *e;
+  for (e = list_begin(&parent->cLinks); e != list_end(&parent->cLinks); e = list_next(e))
+    {
+      struct link *link = list_entry(e, struct link, elem);
+
+      /* If the child's tid matches the given tid, return it */
+      if (link->child->tid == child_tid)
+        return link->child;
+    }
+
+  return NULL;
 }
 
 /* Free the current process's resources. */
@@ -126,6 +181,51 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+    }
+
+  /* Clean up the child links */
+  struct list_elem *e;
+  for (e = list_begin(&cur->cLinks); e != list_end(&cur->cLinks); e = list_next(e))
+    {
+      struct link *link = list_entry(e, struct link, elem);
+
+      lock_acquire(&link->lock);
+      
+      /* If the current thread's child has exited then free the link,
+         otherwise set the link's parent to NULL. */
+      if (link->child == NULL)
+        {
+          lock_release(&link->lock);
+          free(link);
+        }
+      else
+        {
+          link->parent = NULL;
+          lock_release(&link->lock);
+        }
+    }
+  
+  /* Clean up the link between the current thread and the parent thread */
+  struct link *link = cur->pLink;
+
+  if (link != NULL)
+    {
+      lock_acquire(&link->lock);
+
+      /* If the current thread's parent has exited then free the link,
+          otherwise set the link's child to NULL and unblock the parent. */
+      if (link->parent == NULL)
+        {
+          lock_release(&link->lock);
+          free(link);
+        }
+      else
+        {
+          link->child = NULL;
+          link->exit_status = cur->exit_status;
+          sema_up(&link->sema);
+          lock_release(&link->lock);
+        }
     }
 }
 
