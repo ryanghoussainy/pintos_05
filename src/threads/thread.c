@@ -14,6 +14,8 @@
 #include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
+#include "lib/kernel/hash.h"
 #endif
 
 
@@ -107,6 +109,9 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  hash_init(&initial_thread->file_descriptors, fd_hash, fd_less, NULL);
+  initial_thread->next_fd = 2;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -813,4 +818,17 @@ thread_less(const struct list_elem *a_,
   struct thread *thread_b = list_entry (b_, struct thread, elem);
 
   return thread_get_effective_priority(thread_a) < thread_get_effective_priority(thread_b);
+}
+
+/* Hash function for file descriptors, using the fd number */
+unsigned fd_hash(const struct hash_elem *e, void *aux UNUSED) {
+  const struct o_file *fd_struct = hash_entry(e, struct o_file, fd_elem);
+  return hash_int(fd_struct->fd);
+}
+
+/* Comparison function for file descriptors */
+bool fd_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
+  const struct o_file *fd_a = hash_entry(a, struct o_file, fd_elem);
+  const struct o_file *fd_b = hash_entry(b, struct o_file, fd_elem);
+  return fd_a->fd < fd_b->fd;
 }

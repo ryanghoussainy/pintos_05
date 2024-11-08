@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/fixed-point.h"
+#include "lib/kernel/hash.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -103,6 +104,10 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    int exit_status;                    /* Exit status of the thread */
+    struct list files;                  /* List of files opened by the thread */
+    struct hash file_descriptors;       /* List of file_descriptor structures */
+    int next_fd;                        /* Tracks the next available fd number */
 #endif
 
     /* Owned by thread.c. */
@@ -152,5 +157,7 @@ void thread_calculate_load_avg(void);
 void sort_ready_list(void);
 
 bool thread_more(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+unsigned fd_hash(const struct hash_elem *e, void *aux UNUSED);
+bool fd_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
 
 #endif /* threads/thread.h */
