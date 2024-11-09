@@ -70,7 +70,7 @@ static void kernel_thread (thread_func *, void *aux);
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
-static void init_thread (struct thread *, const char *name, int priority, struct thread *parent);
+static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
@@ -106,7 +106,7 @@ thread_init (void)
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
-  init_thread (initial_thread, "main", PRI_DEFAULT, NULL);
+  init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 }
@@ -229,7 +229,7 @@ thread_create (const char *name, int priority,
     return TID_ERROR;
 
   /* Initialize thread. */
-  init_thread (t, name, priority, thread_current());
+  init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
   /* The parent will be the thread running when thread_create() is called */
@@ -237,6 +237,14 @@ thread_create (const char *name, int priority,
 
   t->nice = t_parent->nice;
   t->recent_cpu = 0;
+
+  /* Initialize the link between parent and child */
+  t->pLink = create_link(t_parent, t);
+
+  /* Initialize the hash table for file descriptors */
+  t->file_descriptors = malloc(sizeof(struct hash));
+  ASSERT (t->file_descriptors != NULL);
+  hash_init(t->file_descriptors, fd_hash, fd_less, NULL);
 
   if (thread_mlfqs)
   {
@@ -665,7 +673,7 @@ is_thread (struct thread *t)
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
-init_thread (struct thread *t, const char *name, int priority, struct thread *parent)
+init_thread (struct thread *t, const char *name, int priority)
 {
   enum intr_level old_level;
 
@@ -681,14 +689,9 @@ init_thread (struct thread *t, const char *name, int priority, struct thread *pa
   list_init(&t->locks);
 
 #ifdef USERPROG
-  t->pLink = create_link(parent, t);
   list_init(&t->cLinks);
   t->waited_on = false;
   list_init(&t->files);
-  t->file_descriptors = malloc(sizeof(struct hash));
-  hash_init(t->file_descriptors, fd_hash, fd_less, NULL);
-  /* assertion until malloc failure is handled properly */
-  ASSERT (t->file_descriptors != NULL);
   t->next_fd = 2;
 #endif
 
