@@ -582,6 +582,8 @@ create_link(struct thread *parent, struct thread *child)
 
   link->parent = parent;
   link->child = child;
+  link->exit_status = -1;
+  link->load_status = LOAD_IN_PROGRESS;
   
   /* Initialise link's lock */
   lock_init(&link->lock);

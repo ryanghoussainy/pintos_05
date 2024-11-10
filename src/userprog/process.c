@@ -82,6 +82,10 @@ process_execute (const char *command)
     
     /* Push the link onto the parent's list of child links */
     list_push_back(&parent->cLinks, &link->elem);
+
+    if (link->load_status == LOAD_FAILED) {
+      return TID_ERROR;
+    }
   }
   return tid;
 }
@@ -113,6 +117,20 @@ start_process (void *command_)
     }
 
   success = load (argv[0], &if_.eip, &if_.esp, argv, argc);
+
+  /* Set the load status of the current thread */
+  struct thread *cur = thread_current();
+  if (success)
+    {
+      cur->pLink->load_status = LOAD_SUCCESS;
+    }
+  else
+    {
+      cur->pLink->load_status = LOAD_FAILED;
+    }
+
+  /* Unblock the parent thread after loading is complete */
+  sema_up(&cur->pLink->sema);
 
   /* If load failed, quit. */
   palloc_free_page (command);

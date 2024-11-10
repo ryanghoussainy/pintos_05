@@ -7,6 +7,8 @@
 
 #define CONSOLE_INCR 400
 
+typedef int pid_t;
+
 /*
  * Contains a file opened by a process.
  */
@@ -21,6 +23,8 @@ void syscall_init (void);
 void sys_halt (void);
 void sys_exit (int status);
 int sys_write (int fd, const void *buffer, unsigned size);
+pid_t sys_exec (const char *cmd_line);
+int sys_wait (pid_t pid);
 bool sys_create (const char *file, unsigned initial_size);
 bool sys_remove (const char *file);
 int sys_open (const char *file);
@@ -30,7 +34,5 @@ int sys_write (int fd, const void *buffer, unsigned size);
 void sys_seek (int fd, unsigned position);
 unsigned sys_tell (int fd);
 void sys_close (int fd);
-
-struct o_file *get_o_file_from_fd(int fd);
 
 #endif /* userprog/syscall.h */
