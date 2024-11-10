@@ -24,6 +24,8 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+
+  lock_init(&file_lock);
 }
 
 static void
@@ -44,14 +46,16 @@ syscall_handler (struct intr_frame *f)
 
 /* Terminates PintOS. */
 void
-sys_halt (void) {
+sys_halt (void) 
+{
   /* Calls shutdown_power_off() from devices/shutdown.h. */
   shutdown_power_off();
 }
 
 /* Terminate this process. */
 void 
-sys_exit (int status) {
+sys_exit (int status) 
+{
   /* Sets the exit status of the current thread. */
   struct thread *cur = thread_current();
   cur->exit_status = status;
@@ -63,9 +67,47 @@ sys_exit (int status) {
   thread_exit();
 }
 
+/* Runs the executable whose name is given in cmd line, passing any given 
+arguments, and returns the new process’s program id (pid).*/
+pid_t
+sys_exec(const char *cmd_line)
+{
+  // Return -1 if cmd_line is not valid
+  if (!validate_user_pointer(cmd_line)) {
+    return -1;
+  }
+
+  tid_t child_tid = process_execute(cmd_line);
+
+  if (child_tid == TID_ERROR) {
+    return -1;
+  }
+
+  struct thread *child = get_thread_by_tid(child_tid);
+  ASSERT(child != NULL);
+
+  // Wait for the child to load
+  sema_down(&child->pLink->sema);
+
+  // If the child failed to load, return -1
+  if (child->pLink->load_status == LOAD_FAILED) {
+    return -1;
+  }
+
+  return child_tid;
+}
+
+/* Waits for a child process pid and retrieves the child's exit status. */
+int
+sys_wait(pid_t pid)
+{
+  return process_wait(pid);
+}
+
 /* Writes bytes from buffer to the open file or console */
 int 
-sys_write (int fd, const void *buffer, unsigned size) {
+sys_write (int fd, const void *buffer, unsigned size) 
+{
   /* Writing to console and splitting buffer into defined chunks if needed */
   int rem_size;
   if (fd == 1){
@@ -102,7 +144,8 @@ sys_write (int fd, const void *buffer, unsigned size) {
 
 /* Creates a new file with the given name and initial size. */
 bool 
-sys_create (const char *file, unsigned initial_size) {
+sys_create (const char *file, unsigned initial_size) 
+{
   /* Checks if file is NULL. */
   if (file == NULL) {
     sys_exit(-1);
@@ -123,7 +166,8 @@ sys_create (const char *file, unsigned initial_size) {
 
 /* Removes the file with the given name. */
 bool 
-sys_remove (const char *file) {
+sys_remove (const char *file) 
+{
   /* Checks if file is NULL. */
   if (file == NULL) 
   {
@@ -145,7 +189,8 @@ sys_remove (const char *file) {
 
 /* Opens the file with the given name. */
 int 
-sys_open (const char *file) {
+sys_open (const char *file) 
+{
 
   /* Checks if file is NULL. */
   if (file == NULL) 
@@ -192,7 +237,8 @@ sys_open (const char *file) {
 
 /* Returns the length, in bytes, of the file open as fd. */
 int 
-sys_filesize (int fd) {
+sys_filesize (int fd) 
+{
   /* Acquires file lock to ensure synchronisation. */
   lock_acquire(&file_lock);
 
@@ -214,7 +260,8 @@ sys_filesize (int fd) {
 
 /* Reads size bytes from the file open as fd into buffer. */
 int 
-sys_read (int fd, void *buffer, unsigned size) {
+sys_read (int fd, void *buffer, unsigned size) 
+{
   /* Checks if buffer is valid. */
   if (!is_user_vaddr(buffer) || buffer == NULL) {
     sys_exit(-1);
@@ -245,7 +292,8 @@ sys_read (int fd, void *buffer, unsigned size) {
 
 /* Changes the next byte to be read or written in open file fd to position. */
 void 
-sys_seek (int fd, unsigned position) {
+sys_seek (int fd, unsigned position) 
+{
   /* Acquires opened file from fd. */
     struct o_file *open_file = get_o_file_from_fd(fd);
     if (open_file != NULL) {
@@ -256,7 +304,8 @@ sys_seek (int fd, unsigned position) {
 
 /* Returns the position of the next byte to be read or written in open file fd. */
 unsigned 
-sys_tell (int fd) {
+sys_tell (int fd) 
+{
   /* Acquires opened file from fd. */
     struct o_file *open_file = get_o_file_from_fd(fd);
     if (open_file != NULL) {
@@ -268,7 +317,8 @@ sys_tell (int fd) {
 
 /* Closes file descriptor fd. */
 void 
-sys_close (int fd) {
+sys_close (int fd) 
+{
     struct o_file *open_file = get_o_file_from_fd(fd);
 
     // If the file is found, close it
@@ -288,7 +338,8 @@ sys_close (int fd) {
   3. Points to kernel address space
 */
 static bool
-validate_user_pointer(const void *uaddr) {
+validate_user_pointer(const void *uaddr) 
+{
 
   if (uaddr == NULL) {
     return false;

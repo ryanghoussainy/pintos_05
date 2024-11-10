@@ -127,6 +127,11 @@ struct link
    struct lock lock;                     /* Lock for the whole structure */
    struct semaphore sema;                /* Semaphore for the parent to wait on */
    struct list_elem elem;                /* List element */
+   enum load_status {                    /* Indicates child load's status */
+        LOAD_IN_PROGRESS,
+        LOAD_SUCCESS,
+        LOAD_FAILED
+    } load_status;                       
 };
 
 /* If false (default), use round-robin scheduler.
