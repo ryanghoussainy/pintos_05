@@ -12,9 +12,6 @@
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 
-/* Lock used when handling files to ensure synchronisation. */
-static struct lock file_lock;
-
 /* Array of function pointers to handle syscalls. */
 syscall_func_t syscall_table[NUM_SYSCALLS];
 

@@ -112,6 +112,7 @@ struct thread
     struct list files;                  /* List of files opened by the thread */
     struct hash *file_descriptors;      /* Pointer to hash table of file_descriptor structures */
     int next_fd;                        /* Tracks the next available fd number */
+    struct file *exec_file;             /* Executable file of the thread */
 #endif
 
     /* Owned by thread.c. */
@@ -131,7 +132,7 @@ struct link
         LOAD_IN_PROGRESS,
         LOAD_SUCCESS,
         LOAD_FAILED
-    } load_status;                       
+    } load_status;                      
 };
 
 /* If false (default), use round-robin scheduler.

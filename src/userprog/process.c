@@ -69,6 +69,14 @@ process_execute (const char *command)
     return TID_ERROR;
   strlcpy (fn_copy, command, PGSIZE);
 
+  /* Denying writes to executables if file is in use. */
+  lock_acquire(&file_lock);
+  thread_current()->exec_file = filesys_open(command);
+  if (thread_current()->exec_file) {
+    file_deny_write(thread_current()->exec_file);
+  }
+  lock_release(&file_lock);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (command, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR) {
