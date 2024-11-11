@@ -88,6 +88,21 @@ syscall_handler (struct intr_frame *f)
 
   int syscall_num = load_number_from_vaddr(f->esp);
 
+  /* Ensure that the syscall number is valid. */
+  if (syscall_num < 0 || syscall_num >= NUM_SYSCALLS) 
+  {
+    // Terminate process since the syscall number is invalid
+    struct thread *cur = thread_current();
+    cur->exit_status = -1;
+
+    /* Prints the process termination message. */
+    printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
+
+    /* Terminates current thread. */
+    thread_exit();
+    return;
+  }
+
   syscall_func_t syscall = syscall_table[syscall_num];
   syscall(f);
 }
