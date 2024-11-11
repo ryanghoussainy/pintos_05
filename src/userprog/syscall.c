@@ -207,7 +207,7 @@ sys_create (struct intr_frame *f)
   unsigned initial_size = *(unsigned *) (get_arg_2(f->esp));
 
   /* Checks if file is NULL. */
-  if (file == NULL) {
+  if (file == NULL || !validate_user_pointer(file)) {
     f->eax = false;
 
     // Terminate process since the syscall number is invalid
