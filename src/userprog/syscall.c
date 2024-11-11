@@ -210,7 +210,6 @@ sys_create (struct intr_frame *f)
   if (file == NULL || !validate_user_pointer(file)) {
     f->eax = false;
 
-    // Terminate process since the syscall number is invalid
     exit(-1);
     return;
   }
@@ -259,9 +258,11 @@ sys_open (struct intr_frame *f)
   const char *file = load_address_from_vaddr(get_arg_1(f->esp));
 
   /* Checks if file is NULL. */
-  if (file == NULL) 
+  if (file == NULL || !validate_user_pointer(file)) 
   {
-    f->eax = -1;  
+    f->eax = -1;
+
+    exit(-1);
     return;
   }
 
