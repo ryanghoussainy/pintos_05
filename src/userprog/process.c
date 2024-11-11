@@ -81,19 +81,6 @@ process_execute (const char *command)
   tid = thread_create (command, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR) {
     palloc_free_page (fn_copy); 
-  } else {
-    struct thread *parent = thread_current();
-    struct thread *child = get_thread_by_tid(tid);
-
-    /* Create a link between the parent and child thread */
-    struct link *link = create_link(parent, child);
-    
-    /* Push the link onto the parent's list of child links */
-    list_push_back(&parent->cLinks, &link->elem);
-
-    if (link->load_status == LOAD_FAILED) {
-      return TID_ERROR;
-    }
   }
   return tid;
 }

@@ -240,6 +240,11 @@ thread_create (const char *name, int priority,
 
   /* Initialize the link between parent and child */
   t->pLink = create_link(t_parent, t);
+  list_push_back(&t_parent->cLinks, &t->pLink->elem);
+
+  if (t->pLink->load_status == LOAD_FAILED) {
+      return TID_ERROR;
+  }
 
   /* Initialize the hash table for file descriptors */
   t->file_descriptors = malloc(sizeof(struct hash));
