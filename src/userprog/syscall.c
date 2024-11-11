@@ -193,8 +193,7 @@ sys_write (struct intr_frame *f)
   }
 
   /* Writes to file from current offset and return amount written. */
-  off_t file_offset = file_tell(opened_file->file);
-  rem_size = file_write_at (opened_file->file, buffer, size, file_offset);
+  rem_size = file_write (opened_file->file, buffer, size);
   lock_release(&file_lock);
   f->eax = rem_size;
 }
