@@ -238,6 +238,8 @@ thread_create (const char *name, int priority,
   t->nice = t_parent->nice;
   t->recent_cpu = 0;
 
+#ifdef USERPROG
+
   /* Initialize the link between parent and child */
   t->pLink = create_link(t_parent, t);
   list_push_back(&t_parent->cLinks, &t->pLink->elem);
@@ -250,6 +252,8 @@ thread_create (const char *name, int priority,
   t->file_descriptors = malloc(sizeof(struct hash));
   ASSERT (t->file_descriptors != NULL);
   hash_init(t->file_descriptors, fd_hash, fd_less, NULL);
+
+#endif
 
   if (thread_mlfqs)
   {

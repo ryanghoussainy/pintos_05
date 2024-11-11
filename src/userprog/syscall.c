@@ -69,16 +69,24 @@ init_syscalls_table(void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  int syscall_num = load_number_from_vaddr(f->esp);
 
   if (!validate_user_pointer(get_arg_1(f->esp)) || 
       !validate_user_pointer(get_arg_2(f->esp)) ||
       !validate_user_pointer(get_arg_3(f->esp))) 
   {
     // Terminate process since the given pointer (user or stack) is invalid
-    process_exit();
+    struct thread *cur = thread_current();
+    cur->exit_status = -1;
+
+    /* Prints the process termination message. */
+    printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
+
+    /* Terminates current thread. */
+    thread_exit();
     return;
   }
+
+  int syscall_num = load_number_from_vaddr(f->esp);
 
   syscall_func_t syscall = syscall_table[syscall_num];
   syscall(f);
