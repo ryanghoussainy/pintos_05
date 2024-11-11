@@ -126,17 +126,24 @@ start_process (void *command_)
   struct thread *cur = thread_current();
   if (success)
     {
+      enum intr_level old_level = intr_disable();
       cur->pLink->load_status = LOAD_SUCCESS;
+      intr_set_level(old_level);
     }
   else
     {
+      palloc_free_page (argv[0]);
+      enum intr_level old_level = intr_disable();
       cur->pLink->load_status = LOAD_FAILED;
+      intr_set_level(old_level);
+      sema_up(&cur->pLink->sema);
+      exit(-1);
     }
 
   /* If load failed, quit. */
-  palloc_free_page (command);
-  if (!success) 
-    thread_exit ();
+  // palloc_free_page (argv[0]);
+  // if (!success) 
+  //   thread_exit ();
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -215,26 +222,21 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  enum intr_level old_level = intr_disable();
+
   /* Free hash table and containing data */
   hash_destroy(cur->file_descriptors, NULL);
   free(cur->file_descriptors);
 
-  /* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
-  pd = cur->pagedir;
-  if (pd != NULL) 
-    {
-      /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
-      cur->pagedir = NULL;
-      pagedir_activate (NULL);
-      pagedir_destroy (pd);
-    }
+  /* Allow write back to executable once exited. */
+  if (cur->exec_file) {
+    lock_acquire(&file_lock);
+    file_allow_write(cur->exec_file);
+    file_close(cur->exec_file);
+    lock_release(&file_lock);
+  }
+
+  printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
   /* Clean up the child links */
   struct list_elem *e;
@@ -281,7 +283,24 @@ process_exit (void)
         }
     }
 
-  printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
+  intr_set_level(old_level); 
+
+  /* Destroy the current process's page directory and switch back
+     to the kernel-only page directory. */
+  pd = cur->pagedir;
+  if (pd != NULL) 
+    {
+      /* Correct ordering here is crucial.  We must set
+         cur->pagedir to NULL before switching page directories,
+         so that a timer interrupt can't switch back to the
+         process page directory.  We must activate the base page
+         directory before destroying the process's page
+         directory, or our active page directory will be one
+         that's been freed (and cleared). */
+      cur->pagedir = NULL;
+      pagedir_activate (NULL);
+      pagedir_destroy (pd);
+    }
 }
 
 /* Sets up the CPU for running user code in the current

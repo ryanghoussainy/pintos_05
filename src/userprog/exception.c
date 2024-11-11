@@ -86,6 +86,8 @@ kill (struct intr_frame *f)
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
+
+      thread_current()->exit_status = -1;
       thread_exit (); 
 
     case SEL_KCSEG:
@@ -154,5 +156,13 @@ page_fault (struct intr_frame *f)
           write ? "writing" : "reading",
           user ? "user" : "kernel");
   kill (f);
+
+  /* If fault occurred in user mode, terminate the process. */
+   if (user) {
+      thread_current()->exit_status = -1;
+      kill(f);
+   } else {
+      PANIC("Page fault in kernel mode");
+   }
 }
 

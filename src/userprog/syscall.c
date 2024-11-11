@@ -37,7 +37,7 @@ static bool validate_user_pointer(const void *ptr);
 static uint32_t load_number_from_vaddr (void *vaddr);
 static char *load_address_from_vaddr (void *vaddr);
 
-static void exit(int status);
+// static void exit(int status);
 
 void
 syscall_init (void) 
@@ -510,7 +510,7 @@ static char *load_address_from_vaddr (void *vaddr)
 	return *((char **) vaddr);
 }
 
-static void
+void
 exit(int status)
 {
   struct thread *cur = thread_current();
