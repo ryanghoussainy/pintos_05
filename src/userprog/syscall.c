@@ -15,6 +15,7 @@
 /* Array of function pointers to handle syscalls. */
 syscall_func_t syscall_table[NUM_SYSCALLS];
 
+static void init_syscalls_table(void);
 static void syscall_handler (struct intr_frame *);
 
 static void sys_halt (struct intr_frame *f);
@@ -41,6 +42,15 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 
+  /* Initialise the syscall table and file lock. */
+  init_syscalls_table();
+  lock_init(&file_lock);
+}
+
+/* Initialising function pointer table for handling syscalls. */
+static void
+init_syscalls_table(void) 
+{
   syscall_table[SYS_HALT] = sys_halt;
   syscall_table[SYS_EXIT] = sys_exit;
   syscall_table[SYS_EXEC] = sys_exec;
@@ -54,8 +64,6 @@ syscall_init (void)
   syscall_table[SYS_SEEK] = sys_seek;
   syscall_table[SYS_TELL] = sys_tell;
   syscall_table[SYS_CLOSE] = sys_close;
-
-  lock_init(&file_lock);
 }
 
 static void
