@@ -133,9 +133,6 @@ start_process (void *command_)
       cur->pLink->load_status = LOAD_FAILED;
     }
 
-  /* Unblock the parent thread after loading is complete */
-  sema_up(&cur->pLink->sema);
-
   /* If load failed, quit. */
   palloc_free_page (command);
   if (!success) 
@@ -283,6 +280,8 @@ process_exit (void)
           lock_release(&link->lock);
         }
     }
+
+  printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 }
 
 /* Sets up the CPU for running user code in the current
