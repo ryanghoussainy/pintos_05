@@ -36,6 +36,7 @@ static void sys_close (struct intr_frame *f);
 static bool validate_user_pointer(const void *ptr);
 static uint32_t load_number_from_vaddr (void *vaddr);
 static char *load_address_from_vaddr (void *vaddr);
+static bool is_valid_user_address_range(const void *start, unsigned size);
 
 // static void exit(int status);
 
@@ -162,6 +163,12 @@ sys_write (struct intr_frame *f)
   const void *buffer = load_address_from_vaddr(get_arg_2(f->esp));
   unsigned size = load_number_from_vaddr(get_arg_3(f->esp));
 
+  /* Checks if buffer is valid. */
+  if (!is_valid_user_address_range(buffer, size)) {
+    exit(-1);
+    return;
+  }
+
   /* Writing to console and splitting buffer into defined chunks if needed */
   int rem_size;
   if (fd == STDOUT_FILENO){
@@ -188,7 +195,7 @@ sys_write (struct intr_frame *f)
   /* Checks if file is NULL. */
   if (opened_file == NULL) {
     lock_release(&file_lock);
-    f->eax = 0;
+    exit(-1);
     return;
   }
 
@@ -342,8 +349,9 @@ sys_read (struct intr_frame *f)
   unsigned size = load_number_from_vaddr(get_arg_3(f->esp));
 
   /* Checks if buffer is valid. */
-  if (!is_user_vaddr(buffer) || buffer == NULL) {
-    process_exit();
+  if (!is_valid_user_address_range(buffer, size)) {
+    exit(-1);
+    return;
   }
 
   if (fd == STDOUT_FILENO) {
@@ -517,4 +525,16 @@ exit(int status)
   cur->exit_status = status;
 
   thread_exit();
+}
+
+/* Checks if the given address range is valid. */
+static bool is_valid_user_address_range(const void *start, unsigned size) {
+  const uint8_t *addr = (const uint8_t *)start;
+  for (unsigned i = 0; i < size; i++) {
+    if (!is_user_vaddr(addr) || pagedir_get_page(thread_current()->pagedir, addr) == NULL) {
+      return false;  // Invalid address found.
+    }
+    addr++;
+  }
+  return true;
 }
