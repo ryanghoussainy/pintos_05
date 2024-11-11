@@ -37,6 +37,8 @@ static bool validate_user_pointer(const void *ptr);
 static uint32_t load_number_from_vaddr (void *vaddr);
 static char *load_address_from_vaddr (void *vaddr);
 
+static void exit(int status);
+
 void
 syscall_init (void) 
 {
@@ -75,14 +77,7 @@ syscall_handler (struct intr_frame *f)
       !validate_user_pointer(get_arg_3(f->esp))) 
   {
     // Terminate process since the given pointer (user or stack) is invalid
-    struct thread *cur = thread_current();
-    cur->exit_status = -1;
-
-    /* Prints the process termination message. */
-    printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
-
-    /* Terminates current thread. */
-    thread_exit();
+    exit(-1);
     return;
   }
 
@@ -91,15 +86,7 @@ syscall_handler (struct intr_frame *f)
   /* Ensure that the syscall number is valid. */
   if (syscall_num < 0 || syscall_num >= NUM_SYSCALLS) 
   {
-    // Terminate process since the syscall number is invalid
-    struct thread *cur = thread_current();
-    cur->exit_status = -1;
-
-    /* Prints the process termination message. */
-    printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
-
-    /* Terminates current thread. */
-    thread_exit();
+    exit(-1);
     return;
   }
 
@@ -122,15 +109,7 @@ sys_exit (struct intr_frame *f)
   /* Loads the exit status from the stack. */
   int status = load_number_from_vaddr(get_arg_1(f->esp));
 
-  /* Sets the exit status of the current thread. */
-  struct thread *cur = thread_current();
-  cur->exit_status = status;
-
-  /* Prints the process termination message. */
-  printf ("%s: exit(%d)\n", cur->name, status);
-
-  /* Terminates current thread. */
-  thread_exit();
+  exit(status);
 }
 
 /* Runs the executable whose name is given in cmd line, passing any given 
@@ -231,6 +210,9 @@ sys_create (struct intr_frame *f)
   /* Checks if file is NULL. */
   if (file == NULL) {
     f->eax = false;
+
+    // Terminate process since the syscall number is invalid
+    exit(-1);
     return;
   }
 
@@ -526,4 +508,15 @@ static char *load_address_from_vaddr (void *vaddr)
 	// 	process_exit ();
 
 	return *((char **) vaddr);
+}
+
+static void
+exit(int status)
+{
+  struct thread *cur = thread_current();
+  cur->exit_status = status;
+
+  printf ("%s: exit(%d)\n", cur->name, status);
+
+  thread_exit();
 }
