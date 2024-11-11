@@ -165,7 +165,7 @@ start_process (void *command_)
  * This function will be implemented in task 2.
  * For now, it does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
   /* Get child thread */
   struct thread *child = valid_child_tid(child_tid);
@@ -175,20 +175,22 @@ process_wait (tid_t child_tid UNUSED)
   if (child == NULL || child->waited_on)
     return -1;
 
+  struct link *child_link = child->pLink;
+
   /* Wait for the child to exit */
-  sema_down(&child->pLink->sema);
+  sema_down(&child_link->sema);
 
   /* Set the child's waited_on flag to true */
   child->waited_on = true;
 
   /* Get the exit status of the child */
-  int exit_status = child->exit_status;
+  int exit_status = child_link->exit_status;
 
   /* Remove the link between the parent and child */
-  list_remove(&child->pLink->elem);
+  list_remove(&child_link->elem);
 
   /* Free the link */
-  free(child->pLink);
+  free(child_link);
 
   return exit_status;
 }
