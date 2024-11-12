@@ -107,6 +107,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct link *pLink;                 /* Link to parent link */
     struct list cLinks;                 /* List of child links */
+    struct lock cLinks_lock;            /* Lock for the list of child links */
     bool waited_on;                     /* Whether the thread has been waited on */
     int exit_status;                    /* Exit status of the thread */
     struct list files;                  /* List of files opened by the thread */
@@ -124,6 +125,7 @@ struct link
 {
    struct thread *parent;                /* Parent thread */
    struct thread *child;                 /* Child thread */
+   tid_t child_tid;                      /* Child thread's tid */
    int exit_status;                      /* Exit status of the child thread */
    struct lock lock;                     /* Lock for the whole structure */
    struct semaphore sema;                /* Semaphore for the parent to wait on */

@@ -23,7 +23,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
-static struct thread *valid_child_tid(tid_t child_tid);
+static struct link *valid_child_tid(tid_t child_tid);
 
 struct o_file *
 get_o_file_from_fd(int fd) {
@@ -183,21 +183,25 @@ start_process (void *command_)
 int
 process_wait (tid_t child_tid) 
 {
-  /* Get child thread */
-  struct thread *child = valid_child_tid(child_tid);
+  /* Get child link */
+  struct link *child_link = valid_child_tid(child_tid);
 
   /* If the child_tid is not a valid child of the current thread or 
      we have already waited for this thread, return -1 */
-  if (child == NULL || child->waited_on)
+  if (child_link == NULL)
     return -1;
 
-  struct link *child_link = child->pLink;
+  /* Get child thread */
+  struct thread *child = child_link->child;
 
   /* Wait for the child to exit */
   sema_down(&child_link->sema);
 
-  /* Set the child's waited_on flag to true */
-  child->waited_on = true;
+  /* Set the child's waited_on flag to true if child is still alive */
+  if (child != NULL)
+  {
+    child->waited_on = true;
+  }
 
   /* Get the exit status of the child */
   int exit_status = child_link->exit_status;
@@ -212,12 +216,13 @@ process_wait (tid_t child_tid)
 }
 
 /* Returns the child thread if it is valid, otherwise NULL. */
-static struct thread *
+static struct link *
 valid_child_tid(tid_t child_tid)
 {
   struct thread *parent = thread_current();
   
   /* Iterate through the parent's list of child links. */
+  lock_acquire(&parent->cLinks_lock);
   struct list_elem *e;
   for (e = list_begin(&parent->cLinks); e != list_end(&parent->cLinks); e = list_next(e))
     {
@@ -226,14 +231,16 @@ valid_child_tid(tid_t child_tid)
       lock_acquire(&link->lock);
 
       /* If the child's tid matches the given tid, return it */
-      if (link->child != NULL && link->child->tid == child_tid)
+      if (link->child_tid == child_tid)
         {
           lock_release(&link->lock);
-          return link->child;
+          lock_release(&parent->cLinks_lock);
+          return link;
         }
 
       lock_release(&link->lock);
     }
+  lock_release(&parent->cLinks_lock);
 
   return NULL;
 }
@@ -262,6 +269,7 @@ process_exit (void)
   printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
   /* Clean up the child links */
+  lock_acquire(&cur->cLinks_lock);
   struct list_elem *e;
   for (e = list_begin(&cur->cLinks); e != list_end(&cur->cLinks); e = list_next(e))
     {
@@ -282,6 +290,7 @@ process_exit (void)
           lock_release(&link->lock);
         }
     }
+  lock_release(&cur->cLinks_lock);
   
   /* Clean up the link between the current thread and the parent thread */
   struct link *link = cur->pLink;
@@ -432,6 +441,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv, int a
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire(&file_lock);
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -523,6 +533,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv, int a
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+  lock_release(&file_lock);
   return success;
 }
 

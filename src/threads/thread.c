@@ -242,7 +242,9 @@ thread_create (const char *name, int priority,
 
   /* Initialize the link between parent and child */
   t->pLink = create_link(t_parent, t);
+  lock_acquire(&t_parent->cLinks_lock);
   list_push_back(&t_parent->cLinks, &t->pLink->elem);
+  lock_release(&t_parent->cLinks_lock);
 
   if (t->pLink->load_status == LOAD_FAILED) {
       return TID_ERROR;
@@ -599,6 +601,7 @@ create_link(struct thread *parent, struct thread *child)
 
   link->parent = parent;
   link->child = child;
+  link->child_tid = child->tid;
   link->exit_status = -1;
   link->load_status = LOAD_IN_PROGRESS;
   
@@ -701,6 +704,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
 #ifdef USERPROG
   list_init(&t->cLinks);
+  lock_init(&t->cLinks_lock);
   t->waited_on = false;
   list_init(&t->files);
   t->next_fd = 2;
