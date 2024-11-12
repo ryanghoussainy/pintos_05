@@ -223,9 +223,16 @@ valid_child_tid(tid_t child_tid)
     {
       struct link *link = list_entry(e, struct link, elem);
 
+      lock_acquire(&link->lock);
+
       /* If the child's tid matches the given tid, return it */
-      if (link->child->tid == child_tid)
-        return link->child;
+      if (link->child != NULL && link->child->tid == child_tid)
+        {
+          lock_release(&link->lock);
+          return link->child;
+        }
+
+      lock_release(&link->lock);
     }
 
   return NULL;
