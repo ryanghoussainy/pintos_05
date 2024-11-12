@@ -124,25 +124,10 @@ sys_exec(struct intr_frame *f)
   /* Return -1 if cmd_line is not valid */
   if (!validate_user_pointer(cmd_line)) {
     f->eax = -1;
+    exit(-1);
+    return;
   }
-
-  tid_t child_tid = process_execute(cmd_line);
-
-  if (child_tid == TID_ERROR) {
-    f->eax = -1;
-  }
-
-  struct thread *child = get_thread_by_tid(child_tid);
-  ASSERT(child != NULL);
-
-  // Wait for the child to load
-  sema_down(&child->pLink->sema);
-
-  // If the child failed to load, return -1
-  if (child->pLink->load_status == LOAD_FAILED) {
-    f->eax = -1;
-  }
-  f->eax = child_tid;
+  f->eax = process_execute(cmd_line); 
 }
 
 /* Waits for a child process pid and retrieves the child's exit status. */
