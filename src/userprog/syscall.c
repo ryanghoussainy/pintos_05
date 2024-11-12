@@ -391,6 +391,7 @@ sys_seek (struct intr_frame *f)
 
   /* Checks if opened file is NULL. */
   if (open_file == NULL) {
+    lock_release(&file_lock);
     return;
   }
 
