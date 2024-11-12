@@ -446,7 +446,8 @@ sys_close (struct intr_frame *f)
 
   /* Checks if opened file is NULL. */
   if (open_file == NULL) {
-      return;
+    lock_release(&file_lock);
+    return;
   }
 
   /* Calls file_close() from filesys/file.c. */
