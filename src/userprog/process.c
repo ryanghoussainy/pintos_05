@@ -259,12 +259,22 @@ process_exit (void)
   free(cur->file_descriptors);
 
   /* Allow write back to executable once exited. */
-  if (cur->exec_file) {
-    lock_acquire(&file_lock);
-    file_allow_write(cur->exec_file);
-    file_close(cur->exec_file);
-    lock_release(&file_lock);
-  }
+  // if (cur->exec_file) {
+  //   lock_acquire(&file_lock);
+  //   file_allow_write(cur->exec_file);
+  //   file_close(cur->exec_file);
+  //   lock_release(&file_lock);
+  // }
+
+  /* Allow write back to executable once exited */
+	lock_acquire (&file_lock);
+
+	if (cur->pLink->parent->exec_file)
+	{
+		file_allow_write (cur->pLink->parent->exec_file);
+		file_close (cur->pLink->parent->exec_file);
+	}
+	lock_release (&file_lock);
 
   printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
