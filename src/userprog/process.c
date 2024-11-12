@@ -59,6 +59,11 @@ get_o_file_from_fd(int fd) {
 tid_t
 process_execute (const char *command) 
 {
+  /* Ensure arguments can fit on one page */
+  if (strlen(command) + 1 >= PGSIZE) {
+    return TID_ERROR;
+  }
+
   char *fn_copy;
   tid_t tid;
 
@@ -115,7 +120,7 @@ start_process (void *command_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   /* Tokenise the command string */
-  char *argv[128];
+  char *argv[NUM_ARGS];
   int argc = 0;
   char *token, *save_ptr;
   for (token = strtok_r (command, " ", &save_ptr); token != NULL;
@@ -124,6 +129,12 @@ start_process (void *command_)
       argv[argc] = token;
       argc++;
     }
+
+  /* Limit number of arguments */
+  if (argc > NUM_ARGS) {
+    palloc_free_page (argv[0]);
+    exit(-1);
+  }
 
   success = load (argv[0], &if_.eip, &if_.esp, argv, argc);
 
