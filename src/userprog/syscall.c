@@ -38,8 +38,6 @@ static uint32_t load_number_from_vaddr (void *vaddr);
 static char *load_address_from_vaddr (void *vaddr);
 static bool is_valid_user_address_range(const void *start, unsigned size);
 
-// static void exit(int status);
-
 void
 syscall_init (void) 
 {
@@ -47,7 +45,7 @@ syscall_init (void)
 
   /* Initialise the syscall table and file lock. */
   init_syscalls_table();
-  lock_init(&file_lock);
+  lock_init(&filesys_lock);
 }
 
 /* Initialising function pointer table for handling syscalls. */
@@ -174,19 +172,19 @@ sys_write (struct intr_frame *f)
   }
 
   /* Writing to a file only up until EOF. */
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
   struct o_file *opened_file = get_o_file_from_fd(fd);
 
   /* Checks if file is NULL. */
   if (opened_file == NULL) {
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     exit(-1);
     return;
   }
 
   /* Writes to file from current offset and return amount written. */
   rem_size = file_write (opened_file->file, buffer, size);
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
   f->eax = rem_size;
 }
 
@@ -207,13 +205,13 @@ sys_create (struct intr_frame *f)
   }
 
   /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
 
   /* Calls filesys_create() from filesys/filesys.c. */
   bool success = filesys_create(file, initial_size);
 
   /* Releases file lock. */
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
   f->eax = success;
 }
 
@@ -232,13 +230,13 @@ sys_remove (struct intr_frame *f)
   }
 
   /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
 
   /* Calls filesys_remove() from filesys/filesys.c. */
   bool success = filesys_remove(file);
 
   /* Releases file lock. */
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
   f->eax = success;
 }
 
@@ -259,7 +257,7 @@ sys_open (struct intr_frame *f)
   }
 
   /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
 
   /* Calls filesys_open() from filesys/filesys.c. */
   struct file *new_file = filesys_open(file);
@@ -267,7 +265,7 @@ sys_open (struct intr_frame *f)
   /* Checks if file is NULL. */
   if (new_file == NULL) 
   {
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     f->eax = -1;
     return;
   }
@@ -279,7 +277,7 @@ sys_open (struct intr_frame *f)
   if (cur_o_file == NULL) 
   {
     file_close(new_file);
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     f->eax = -1;
     return;
   }
@@ -293,7 +291,7 @@ sys_open (struct intr_frame *f)
   hash_insert(cur->file_descriptors, &cur_o_file->fd_elem);
 
   /* Releases file lock. */
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
   f->eax = cur_o_file->fd;
 }
 
@@ -305,14 +303,14 @@ sys_filesize (struct intr_frame *f)
   int fd = *(int *) (get_arg_1(f->esp));
 
   /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
 
   /* Acquires opened file from fd. */
   struct o_file *opened_file = get_o_file_from_fd(fd);
 
   /* Checks if opened file is NULL. */
   if (opened_file == NULL) {
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     f->eax = -1;
     return;
   }
@@ -320,7 +318,7 @@ sys_filesize (struct intr_frame *f)
   int length = file_length(opened_file->file);
 
   /* Releases file lock. */
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
   f->eax = length;
 }
 
@@ -354,14 +352,14 @@ sys_read (struct intr_frame *f)
     return; 
   } else {
     /* Acquire the file lock to ensure synchronisation. */
-    lock_acquire(&file_lock);
+    lock_acquire(&filesys_lock);
 
     /* Get the opened file from the file descriptor. */
     struct o_file *opened_file = get_o_file_from_fd(fd);
     
     /* Check if the file is NULL. */
     if (opened_file == NULL) {
-      lock_release(&file_lock);
+      lock_release(&filesys_lock);
       f->eax = -1;
       return;
     }
@@ -370,7 +368,7 @@ sys_read (struct intr_frame *f)
     int read_characters = file_read(opened_file->file, buffer, size);
 
     /* Release the file lock. */
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     f->eax = read_characters;
   }
 }
@@ -384,14 +382,14 @@ sys_seek (struct intr_frame *f)
   unsigned position = load_number_from_vaddr(get_arg_2(f->esp));
 
   /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
 
   /* Acquires opened file from fd. */
   struct o_file *open_file = get_o_file_from_fd(fd);
 
   /* Checks if opened file is NULL. */
   if (open_file == NULL) {
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     return;
   }
 
@@ -399,7 +397,7 @@ sys_seek (struct intr_frame *f)
   file_seek (open_file->file, position);
 
   /* Release the file lock. */
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
 }
 
 /* Returns the position of the next byte to be read or written in open file fd. */
@@ -410,14 +408,14 @@ sys_tell (struct intr_frame *f)
   int fd = load_number_from_vaddr(get_arg_1(f->esp));
 
   /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
 
   /* Acquires opened file from fd. */
   struct o_file *open_file = get_o_file_from_fd(fd);
 
   /* Checks if opened file is NULL. */
   if (open_file == NULL) {
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     f->eax = 0;
     return;
   }
@@ -426,7 +424,7 @@ sys_tell (struct intr_frame *f)
   int position = file_tell(open_file->file);
 
   /* Releases file lock. */
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
   f->eax = position;
 
 }
@@ -439,7 +437,7 @@ sys_close (struct intr_frame *f)
   int fd = load_number_from_vaddr(get_arg_1(f->esp));
 
   /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
 
 
   /* Get the opened file from the file descriptor. */
@@ -447,7 +445,7 @@ sys_close (struct intr_frame *f)
 
   /* Checks if opened file is NULL. */
   if (open_file == NULL) {
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     return;
   }
 
@@ -460,7 +458,7 @@ sys_close (struct intr_frame *f)
   free(open_file);
 
   /* Releases file lock. */
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
 }
 
 /*  Take in a user pointer and check that it is valid, i.e:
@@ -490,18 +488,12 @@ validate_user_pointer(const void *uaddr)
 /* Deferences stack pointer into an uint32_t. */
 static uint32_t load_number_from_vaddr (void *vaddr)
 {
-	// if (get_user ((uint8_t *) vaddr) == -1)
-	// 	process_exit ();
-
 	return *((uint32_t *) vaddr);
 }
 
 /* Deferences stack pointer into a pointer to a char. */
 static char *load_address_from_vaddr (void *vaddr)
 {
-	// if (get_user ((uint8_t *) vaddr) == -1)
-	// 	process_exit ();
-
 	return *((char **) vaddr);
 }
 

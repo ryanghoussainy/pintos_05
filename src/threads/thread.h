@@ -110,7 +110,7 @@ struct thread
     struct lock cLinks_lock;            /* Lock for the list of child links */
     bool waited_on;                     /* Whether the thread has been waited on */
     int exit_status;                    /* Exit status of the thread */
-    struct list files;                  /* List of files opened by the thread */
+    
     struct hash *file_descriptors;      /* Pointer to hash table of file_descriptor structures */
     int next_fd;                        /* Tracks the next available fd number */
     struct file *exec_file;             /* Executable file of the thread */

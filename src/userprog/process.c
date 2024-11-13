@@ -84,16 +84,16 @@ process_execute (const char *command)
 
   /* Denying writes to executables if file is in use. */
   struct thread *cur = thread_current();
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
 
   cur->exec_file = filesys_open(command_name);
   if (cur->exec_file == NULL) {
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     return TID_ERROR;
   }
 
   file_deny_write(cur->exec_file);
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (command_name, PRI_DEFAULT, start_process, fn_copy);
@@ -281,12 +281,12 @@ process_exit (void)
   free(cur->file_descriptors);
 
   /* Allow write back to executable once exited */
-	lock_acquire (&file_lock);
+	lock_acquire (&filesys_lock);
 	if (cur->pLink->parent->exec_file != NULL && !has_children(cur->pLink->parent, cur->tid))
 	{
 		file_close (cur->pLink->parent->exec_file);
 	}
-	lock_release (&file_lock);
+	lock_release (&filesys_lock);
 
   printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
@@ -463,8 +463,9 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv, int a
   process_activate ();
 
   /* Open executable file. */
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
   file = filesys_open (file_name);
+  lock_release(&filesys_lock);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -555,7 +556,6 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv, int a
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
-  lock_release(&file_lock);
   return success;
 }
 
