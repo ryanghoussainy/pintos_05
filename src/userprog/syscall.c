@@ -469,20 +469,9 @@ sys_close (struct intr_frame *f)
 static bool
 validate_user_pointer(const void *uaddr) 
 {
-
-  if (uaddr == NULL) {
-    return false;
-  }
-
-  if (!is_user_vaddr(uaddr)) {
-    return false;
-  }
-
-  if (pagedir_get_page(thread_current()->pagedir, uaddr) == NULL) {
-    return false;
-  }
-
-  return true;
+  return (uaddr != NULL 
+          && is_user_vaddr(uaddr) 
+          && pagedir_get_page(thread_current()->pagedir, uaddr) != NULL);
 }
 
 /* Deferences stack pointer into an uint32_t. */
