@@ -332,8 +332,8 @@ process_exit (void)
         {
           link->child = NULL;
           link->exit_status = cur->exit_status;
-          sema_up(&link->sema);
           lock_release(&link->lock);
+          sema_up(&link->sema);
         }
     }
 
