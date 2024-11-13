@@ -156,11 +156,6 @@ start_process (void *command_)
       exit(-1);
     }
 
-  /* If load failed, quit. */
-  // palloc_free_page (argv[0]);
-  // if (!success) 
-  //   thread_exit ();
-
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -245,6 +240,33 @@ valid_child_tid(tid_t child_tid)
   return NULL;
 }
 
+/* Returns true if and only if a thread has children, except for `except`. */
+static bool
+has_children(struct thread *t, tid_t except)
+{
+  lock_acquire(&t->cLinks_lock);
+  /* Loop through links with children and check if any are still alive */
+  struct list_elem *e;
+  for (e = list_begin(&t->cLinks); e != list_end(&t->cLinks); e = list_next(e))
+    {
+      struct link *link = list_entry(e, struct link, elem);
+
+      lock_acquire(&link->lock);
+
+      /* If the child is still alive and not the exception, return true */
+      if (link->child != NULL && link->child_tid != except)
+        {
+          lock_release(&link->lock);
+          lock_release(&t->cLinks_lock);
+          return true;
+        }
+
+      lock_release(&link->lock);
+    }
+  lock_release(&t->cLinks_lock);
+  return false;
+}
+
 /* Free the current process's resources. */
 void
 process_exit (void)
@@ -258,20 +280,10 @@ process_exit (void)
   hash_destroy(cur->file_descriptors, NULL);
   free(cur->file_descriptors);
 
-  /* Allow write back to executable once exited. */
-  // if (cur->exec_file) {
-  //   lock_acquire(&file_lock);
-  //   file_allow_write(cur->exec_file);
-  //   file_close(cur->exec_file);
-  //   lock_release(&file_lock);
-  // }
-
   /* Allow write back to executable once exited */
 	lock_acquire (&file_lock);
-
-	if (cur->pLink->parent->exec_file)
+	if (cur->pLink->parent->exec_file != NULL && !has_children(cur->pLink->parent, cur->tid))
 	{
-		file_allow_write (cur->pLink->parent->exec_file);
 		file_close (cur->pLink->parent->exec_file);
 	}
 	lock_release (&file_lock);
