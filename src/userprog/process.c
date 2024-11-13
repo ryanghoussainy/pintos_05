@@ -75,11 +75,12 @@ process_execute (const char *command)
   strlcpy (fn_copy, command, PGSIZE);
 
   /* Extract the command name from the command string */
-  char *command_name = palloc_get_page(0);
+  char *command_name = malloc(strlen(command) + 1);
   if (command_name == NULL) {
+    palloc_free_page(fn_copy);
     return TID_ERROR;
   }
-  strlcpy(command_name, command, PGSIZE);
+  strlcpy(command_name, command, strlen(command) + 1);
   command_name = strtok_r(command_name, " ", &command_name);
 
   /* Denying writes to executables if file is in use. */
@@ -89,6 +90,8 @@ process_execute (const char *command)
   cur->exec_file = filesys_open(command_name);
   if (cur->exec_file == NULL) {
     lock_release(&filesys_lock);
+    palloc_free_page(fn_copy);
+    free(command_name);
     return TID_ERROR;
   }
 
@@ -99,7 +102,7 @@ process_execute (const char *command)
   tid = thread_create (command_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR) {
     palloc_free_page (fn_copy);
-    palloc_free_page (command_name);
+    free(command_name);
   }
   return tid;
 }
