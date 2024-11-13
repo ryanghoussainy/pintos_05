@@ -251,9 +251,7 @@ thread_create (const char *name, int priority,
   }
 
   /* Initialize the hash table for file descriptors */
-  t->file_descriptors = malloc(sizeof(struct hash));
-  ASSERT (t->file_descriptors != NULL);
-  hash_init(t->file_descriptors, fd_hash, fd_less, NULL);
+  hash_init(&t->file_descriptors, fd_hash, fd_less, NULL);
 
 #endif
 
@@ -706,7 +704,6 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->cLinks);
   lock_init(&t->cLinks_lock);
   t->waited_on = false;
-  
   t->next_fd = 2;
 #endif
 
