@@ -288,7 +288,7 @@ sys_open (struct intr_frame *f)
   cur_o_file->file = new_file;
 
   /* Inserts the file descriptor into the hash table of running process. */
-  hash_insert(cur->file_descriptors, &cur_o_file->fd_elem);
+  hash_insert(&cur->file_descriptors, &cur_o_file->fd_elem);
 
   /* Releases file lock. */
   lock_release(&filesys_lock);
@@ -453,7 +453,7 @@ sys_close (struct intr_frame *f)
   file_close (open_file->file);
 
   // Remove the entry from the open_files hash table.
-  hash_delete (thread_current()->file_descriptors, &open_file->fd_elem);
+  hash_delete (&thread_current()->file_descriptors, &open_file->fd_elem);
 
   free(open_file);
 

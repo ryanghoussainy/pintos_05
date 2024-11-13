@@ -39,7 +39,7 @@ get_o_file_from_fd(int fd) {
     search_open_file.fd = fd;
 
     /* Find file in fd hash table. */
-    struct hash_elem *found_file_elem = hash_find(cur->file_descriptors, &search_open_file.fd_elem);
+    struct hash_elem *found_file_elem = hash_find(&cur->file_descriptors, &search_open_file.fd_elem);
 
     // File not found, return NULL.
     if (found_file_elem == NULL) {
@@ -280,8 +280,7 @@ process_exit (void)
   enum intr_level old_level = intr_disable();
 
   /* Free hash table and containing data */
-  hash_destroy(cur->file_descriptors, NULL);
-  free(cur->file_descriptors);
+  hash_destroy(&cur->file_descriptors, NULL);
 
   /* Allow write back to executable once exited */
 	lock_acquire (&filesys_lock);
