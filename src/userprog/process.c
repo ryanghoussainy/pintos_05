@@ -23,7 +23,6 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
-static struct link *valid_child_tid(tid_t child_tid);
 
 struct o_file *
 get_o_file_from_fd(int fd) {
@@ -84,26 +83,39 @@ process_execute (const char *command)
   command_name = strtok_r(command_name, " ", &command_name);
 
   /* Denying writes to executables if file is in use. */
-  struct thread *cur = thread_current();
-  lock_acquire(&filesys_lock);
+  // struct thread *cur = thread_current();
+  // lock_acquire(&filesys_lock);
 
-  cur->exec_file = filesys_open(command_name);
-  if (cur->exec_file == NULL) {
-    lock_release(&filesys_lock);
-    palloc_free_page(fn_copy);
-    free(command_name);
-    return TID_ERROR;
-  }
+  // cur->exec_file = filesys_open(command_name);
+  // if (cur->exec_file == NULL) {
+  //   lock_release(&filesys_lock);
+  //   palloc_free_page(fn_copy);
+  //   free(command_name);
+  //   return TID_ERROR;
+  // }
 
-  file_deny_write(cur->exec_file);
-  lock_release(&filesys_lock);
+  // file_deny_write(cur->exec_file);
+  // lock_release(&filesys_lock);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (command_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR) {
     palloc_free_page (fn_copy);
     free(command_name);
+    return TID_ERROR;
   }
+
+  /* Get link with child */
+  struct link *child_link = valid_child_tid(tid);
+  if (child_link == NULL) {
+    palloc_free_page (fn_copy);
+    free(command_name);
+    return TID_ERROR;
+  }
+
+  /* Wait for child to load */
+  sema_down(&child_link->load_sema);
+
   return tid;
 }
 
@@ -145,17 +157,21 @@ start_process (void *command_)
   struct thread *cur = thread_current();
   if (success)
     {
-      enum intr_level old_level = intr_disable();
+      lock_acquire(&cur->pLink->lock); 
       cur->pLink->load_status = LOAD_SUCCESS;
-      intr_set_level(old_level);
+      lock_release(&cur->pLink->lock);
+
+      sema_up(&cur->pLink->load_sema);
     }
   else
     {
       palloc_free_page (argv[0]);
-      enum intr_level old_level = intr_disable();
+      
+      lock_acquire(&cur->pLink->lock);
       cur->pLink->load_status = LOAD_FAILED;
-      intr_set_level(old_level);
-      sema_up(&cur->pLink->sema);
+      lock_release(&cur->pLink->lock);
+      
+      sema_up(&cur->pLink->load_sema);
       exit(-1);
     }
 
@@ -214,7 +230,7 @@ process_wait (tid_t child_tid)
 }
 
 /* Returns the child thread if it is valid, otherwise NULL. */
-static struct link *
+struct link *
 valid_child_tid(tid_t child_tid)
 {
   struct thread *parent = thread_current();
@@ -283,12 +299,12 @@ process_exit (void)
   hash_destroy(&cur->file_descriptors, NULL);
 
   /* Allow write back to executable once exited */
-	lock_acquire (&filesys_lock);
-	if (cur->pLink->parent->exec_file != NULL && !has_children(cur->pLink->parent, cur->tid))
+	if (cur->exec_file != NULL)
 	{
-		file_close (cur->pLink->parent->exec_file);
+	  lock_acquire (&filesys_lock);
+		file_close (cur->exec_file);
+	  lock_release (&filesys_lock);
 	}
-	lock_release (&filesys_lock);
 
   printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
@@ -473,6 +489,8 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv, int a
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+  file_deny_write(file);
+  t->exec_file = file;
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -557,7 +575,6 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv, int a
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 

@@ -129,6 +129,7 @@ struct link
    int exit_status;                      /* Exit status of the child thread */
    struct lock lock;                     /* Lock for the whole structure */
    struct semaphore sema;                /* Semaphore for the parent to wait on */
+   struct semaphore load_sema;           /* Semaphore for the child to signal load status */
    struct list_elem elem;                /* List element */
    enum load_status {                    /* Indicates child load's status */
         LOAD_IN_PROGRESS,

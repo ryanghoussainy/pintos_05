@@ -246,9 +246,9 @@ thread_create (const char *name, int priority,
   list_push_back(&t_parent->cLinks, &t->pLink->elem);
   lock_release(&t_parent->cLinks_lock);
 
-  if (t->pLink->load_status == LOAD_FAILED) {
-      return TID_ERROR;
-  }
+  // if (t->pLink->load_status == LOAD_FAILED) {
+  //     return TID_ERROR;
+  // }
 
   /* Initialize the hash table for file descriptors */
   hash_init(&t->file_descriptors, fd_hash, fd_less, NULL);
@@ -608,6 +608,9 @@ create_link(struct thread *parent, struct thread *child)
 
   /* Initialise link's semaphore */
   sema_init(&link->sema, 0);
+
+  /* Initialise link's load semaphore */
+  sema_init(&link->load_sema, 0);
  
   return link;
 }
