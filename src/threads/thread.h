@@ -110,7 +110,6 @@ struct thread
     struct lock cLinks_lock;            /* Lock for the list of child links */
     bool waited_on;                     /* Whether the thread has been waited on */
     int exit_status;                    /* Exit status of the thread */
-    
     struct hash file_descriptors;       /* Pointer to hash table of file_descriptor structures */
     int next_fd;                        /* Tracks the next available fd number */
     struct file *exec_file;             /* Executable file of the thread */
@@ -132,7 +131,6 @@ struct link
    struct semaphore load_sema;           /* Semaphore for the child to signal load status */
    struct list_elem elem;                /* List element */
    enum load_status {                    /* Indicates child load's status */
-        LOAD_IN_PROGRESS,
         LOAD_SUCCESS,
         LOAD_FAILED
     } load_status;                      

@@ -18,6 +18,7 @@ syscall_func_t syscall_table[NUM_SYSCALLS];
 static void init_syscalls_table(void);
 static void syscall_handler (struct intr_frame *);
 
+/* Syscall functions */
 static void sys_halt (struct intr_frame *f);
 static void sys_exit (struct intr_frame *f);
 static void sys_write (struct intr_frame *f);
@@ -43,7 +44,7 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 
-  /* Initialise the syscall table and file lock. */
+  /* Initialise the syscall table and file system lock. */
   init_syscalls_table();
   lock_init(&filesys_lock);
 }
@@ -75,11 +76,12 @@ syscall_handler (struct intr_frame *f)
       !validate_user_pointer(get_arg_2(f->esp)) ||
       !validate_user_pointer(get_arg_3(f->esp))) 
   {
-    // Terminate process since the given pointer (user or stack) is invalid
+    /* Terminate process since the given pointer (user or stack) is invalid */
     exit(-1);
     return;
   }
 
+  /* Load the syscall number from the stack. */
   int syscall_num = load_number_from_vaddr(f->esp);
 
   /* Ensure that the syscall number is valid. */
@@ -89,6 +91,7 @@ syscall_handler (struct intr_frame *f)
     return;
   }
 
+  /* Call the appropriate syscall function. */
   syscall_func_t syscall = syscall_table[syscall_num];
   syscall(f);
 }
@@ -107,7 +110,6 @@ sys_exit (struct intr_frame *f)
 {
   /* Loads the exit status from the stack. */
   int status = load_number_from_vaddr(get_arg_1(f->esp));
-
   exit(status);
 }
 
@@ -199,18 +201,14 @@ sys_create (struct intr_frame *f)
   /* Checks if file is NULL. */
   if (file == NULL || !validate_user_pointer(file)) {
     f->eax = false;
-
     exit(-1);
     return;
   }
 
-  /* Acquires file lock to ensure synchronisation. */
+
+  /* Create the file */
   lock_acquire(&filesys_lock);
-
-  /* Calls filesys_create() from filesys/filesys.c. */
   bool success = filesys_create(file, initial_size);
-
-  /* Releases file lock. */
   lock_release(&filesys_lock);
   f->eax = success;
 }
@@ -229,13 +227,10 @@ sys_remove (struct intr_frame *f)
     return;
   }
 
-  /* Acquires file lock to ensure synchronisation. */
+
+  /* Remove the file */
   lock_acquire(&filesys_lock);
-
-  /* Calls filesys_remove() from filesys/filesys.c. */
   bool success = filesys_remove(file);
-
-  /* Releases file lock. */
   lock_release(&filesys_lock);
   f->eax = success;
 }
@@ -251,18 +246,13 @@ sys_open (struct intr_frame *f)
   if (file == NULL || !validate_user_pointer(file)) 
   {
     f->eax = -1;
-
     exit(-1);
     return;
   }
 
-  /* Acquires file lock to ensure synchronisation. */
+  /* Opens the file */
   lock_acquire(&filesys_lock);
-
-  /* Calls filesys_open() from filesys/filesys.c. */
   struct file *new_file = filesys_open(file);
-
-  /* Checks if file is NULL. */
   if (new_file == NULL) 
   {
     lock_release(&filesys_lock);
@@ -272,8 +262,6 @@ sys_open (struct intr_frame *f)
 
   /* Creates an opened file struct. */
   struct o_file *cur_o_file = malloc(sizeof(struct o_file));
-
-  /* Check if opened file is NULL. */
   if (cur_o_file == NULL) 
   {
     file_close(new_file);
@@ -290,7 +278,6 @@ sys_open (struct intr_frame *f)
   /* Inserts the file descriptor into the hash table of running process. */
   hash_insert(&cur->file_descriptors, &cur_o_file->fd_elem);
 
-  /* Releases file lock. */
   lock_release(&filesys_lock);
   f->eax = cur_o_file->fd;
 }
@@ -302,22 +289,17 @@ sys_filesize (struct intr_frame *f)
   /* Loads the file descriptor from the stack. */
   int fd = *(int *) (get_arg_1(f->esp));
 
-  /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&filesys_lock);
-
   /* Acquires opened file from fd. */
+  lock_acquire(&filesys_lock);
   struct o_file *opened_file = get_o_file_from_fd(fd);
-
-  /* Checks if opened file is NULL. */
   if (opened_file == NULL) {
     lock_release(&filesys_lock);
     f->eax = -1;
     return;
   }
-  /* Calls file_length() from filesys/file.c. */
-  int length = file_length(opened_file->file);
 
-  /* Releases file lock. */
+  /* Get the length of the file. */
+  int length = file_length(opened_file->file);
   lock_release(&filesys_lock);
   f->eax = length;
 }
@@ -337,6 +319,7 @@ sys_read (struct intr_frame *f)
     return;
   }
 
+  /* Check if the file descriptor is valid. */
   if (fd == STDOUT_FILENO) {
     /* Cannot read from stdout. */
     f->eax = -1;
@@ -351,23 +334,17 @@ sys_read (struct intr_frame *f)
     f->eax = size;
     return; 
   } else {
-    /* Acquire the file lock to ensure synchronisation. */
-    lock_acquire(&filesys_lock);
-
     /* Get the opened file from the file descriptor. */
+    lock_acquire(&filesys_lock);
     struct o_file *opened_file = get_o_file_from_fd(fd);
-    
-    /* Check if the file is NULL. */
     if (opened_file == NULL) {
       lock_release(&filesys_lock);
       f->eax = -1;
       return;
     }
 
-    // Read from the file into the buffer, returning the bytes written.
+    /* Read from the file into the buffer, returning the bytes written. */
     int read_characters = file_read(opened_file->file, buffer, size);
-
-    /* Release the file lock. */
     lock_release(&filesys_lock);
     f->eax = read_characters;
   }
@@ -381,22 +358,16 @@ sys_seek (struct intr_frame *f)
   int fd = load_number_from_vaddr(get_arg_1(f->esp));
   unsigned position = load_number_from_vaddr(get_arg_2(f->esp));
 
-  /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&filesys_lock);
-
   /* Acquires opened file from fd. */
+  lock_acquire(&filesys_lock);
   struct o_file *open_file = get_o_file_from_fd(fd);
-
-  /* Checks if opened file is NULL. */
   if (open_file == NULL) {
     lock_release(&filesys_lock);
     return;
   }
 
-  /* Calls file_seek() from filesys/file.c. */
+  /* Seek to the position in the file. */
   file_seek (open_file->file, position);
-
-  /* Release the file lock. */
   lock_release(&filesys_lock);
 }
 
@@ -407,26 +378,19 @@ sys_tell (struct intr_frame *f)
   /* Loads the file descriptor from the stack. */
   int fd = load_number_from_vaddr(get_arg_1(f->esp));
 
-  /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&filesys_lock);
-
   /* Acquires opened file from fd. */
+  lock_acquire(&filesys_lock);
   struct o_file *open_file = get_o_file_from_fd(fd);
-
-  /* Checks if opened file is NULL. */
   if (open_file == NULL) {
     lock_release(&filesys_lock);
     f->eax = 0;
     return;
   }
   
-  /* Calls file_tell() from filesys/file.c. */
+  /* Get the position of the file. */
   int position = file_tell(open_file->file);
-
-  /* Releases file lock. */
   lock_release(&filesys_lock);
   f->eax = position;
-
 }
 
 /* Closes file descriptor fd. */
@@ -436,28 +400,22 @@ sys_close (struct intr_frame *f)
   /* Loads the file descriptor from the stack. */
   int fd = load_number_from_vaddr(get_arg_1(f->esp));
 
-  /* Acquires file lock to ensure synchronisation. */
-  lock_acquire(&filesys_lock);
-
-
   /* Get the opened file from the file descriptor. */
+  lock_acquire(&filesys_lock);
   struct o_file *open_file = get_o_file_from_fd(fd);
-
-  /* Checks if opened file is NULL. */
   if (open_file == NULL) {
     lock_release(&filesys_lock);
     return;
   }
 
-  /* Calls file_close() from filesys/file.c. */
+  /* Close the file */
   file_close (open_file->file);
 
-  // Remove the entry from the open_files hash table.
+  /* Remove the entry from the open_files hash table. */
   hash_delete (&thread_current()->file_descriptors, &open_file->fd_elem);
 
+  /* Free the opened file struct */
   free(open_file);
-
-  /* Releases file lock. */
   lock_release(&filesys_lock);
 }
 
@@ -491,7 +449,6 @@ exit(int status)
 {
   struct thread *cur = thread_current();
   cur->exit_status = status;
-
   thread_exit();
 }
 
@@ -500,7 +457,7 @@ static bool is_valid_user_address_range(const void *start, unsigned size) {
   const uint8_t *addr = (const uint8_t *)start;
   for (unsigned i = 0; i < size; i++) {
     if (!is_user_vaddr(addr) || pagedir_get_page(thread_current()->pagedir, addr) == NULL) {
-      return false;  // Invalid address found.
+      return false;
     }
     addr++;
   }

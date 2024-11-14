@@ -23,6 +23,8 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
+static struct link *valid_child_tid(tid_t child_tid);
+static void fd_destroy(struct hash_elem *e, void *aux UNUSED);
 
 struct o_file *
 get_o_file_from_fd(int fd) {
@@ -40,12 +42,12 @@ get_o_file_from_fd(int fd) {
     /* Find file in fd hash table. */
     struct hash_elem *found_file_elem = hash_find(&cur->file_descriptors, &search_open_file.fd_elem);
 
-    // File not found, return NULL.
+    /* File not found, return NULL. */
     if (found_file_elem == NULL) {
         return NULL;
     }
 
-    // Else, return the file.
+    /* Else, return the file. */
     struct o_file *open_file = hash_entry(found_file_elem, struct o_file, fd_elem);
   
     return open_file;
@@ -58,13 +60,13 @@ get_o_file_from_fd(int fd) {
 tid_t
 process_execute (const char *command) 
 {
+  char *fn_copy;
+  tid_t tid;
+
   /* Ensure arguments can fit on one page */
   if (strlen(command) + 1 >= PGSIZE) {
     return TID_ERROR;
   }
-
-  char *fn_copy;
-  tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -83,21 +85,6 @@ process_execute (const char *command)
   char *save_ptr;
   char *token = strtok_r(command_name, " ", &save_ptr);
 
-  /* Denying writes to executables if file is in use. */
-  // struct thread *cur = thread_current();
-  // lock_acquire(&filesys_lock);
-
-  // cur->exec_file = filesys_open(command_name);
-  // if (cur->exec_file == NULL) {
-  //   lock_release(&filesys_lock);
-  //   palloc_free_page(fn_copy);
-  //   free(command_name);
-  //   return TID_ERROR;
-  // }
-
-  // file_deny_write(cur->exec_file);
-  // lock_release(&filesys_lock);
-
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
 
@@ -109,11 +96,11 @@ process_execute (const char *command)
 
   /* Wait for child to load */
   sema_down(&child_link->load_sema);
-
   if (child_link->load_status == LOAD_FAILED) {
     tid = TID_ERROR;
   }
 
+  /* Free the command name and command copy */
   free(command_name);
   palloc_free_page (fn_copy);
 
@@ -136,7 +123,7 @@ start_process (void *command_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   /* Tokenise the command string */
-  char *argv[NUM_ARGS];
+  char *argv[MAX_ARGS];
   int argc = 0;
   char *token, *save_ptr;
   for (token = strtok_r (command, " ", &save_ptr); token != NULL;
@@ -148,11 +135,13 @@ start_process (void *command_)
 
   /* Limit number of arguments */
   struct thread *cur = thread_current();
-  if (argc > NUM_ARGS) {
+  if (argc > MAX_ARGS) {
+    /* Get link lock and set load status */
     lock_acquire(&cur->pLink->lock);
     cur->pLink->load_status = LOAD_FAILED;
     lock_release(&cur->pLink->lock);
 
+    /* Signal parent that load has failed */
     sema_up(&cur->pLink->load_sema);
     exit(-1);
   }
@@ -161,23 +150,17 @@ start_process (void *command_)
   success = load (argv[0], &if_.eip, &if_.esp, argv, argc);
 
   /* Set the load status of the current thread */
-  if (success)
-    {
-      lock_acquire(&cur->pLink->lock); 
-      cur->pLink->load_status = LOAD_SUCCESS;
-      lock_release(&cur->pLink->lock);
+  lock_acquire(&cur->pLink->lock);
+  cur->pLink->load_status = success ? LOAD_SUCCESS : LOAD_FAILED;
+  lock_release(&cur->pLink->lock);
 
-      sema_up(&cur->pLink->load_sema);
-    }
-  else
-    {
-      lock_acquire(&cur->pLink->lock);
-      cur->pLink->load_status = LOAD_FAILED;
-      lock_release(&cur->pLink->lock);
-      
-      sema_up(&cur->pLink->load_sema);
-      exit(-1);
-    }
+  /* Signal parent that load has completed */
+  sema_up(&cur->pLink->load_sema);
+
+  /* If load failed, quit. */
+  if (!success) {
+    exit(-1);
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -234,7 +217,7 @@ process_wait (tid_t child_tid)
 }
 
 /* Returns the child thread if it is valid, otherwise NULL. */
-struct link *
+static struct link *
 valid_child_tid(tid_t child_tid)
 {
   struct thread *parent = thread_current();
@@ -261,33 +244,6 @@ valid_child_tid(tid_t child_tid)
   lock_release(&parent->cLinks_lock);
 
   return NULL;
-}
-
-/* Returns true if and only if a thread has children, except for `except`. */
-static bool
-has_children(struct thread *t, tid_t except)
-{
-  lock_acquire(&t->cLinks_lock);
-  /* Loop through links with children and check if any are still alive */
-  struct list_elem *e;
-  for (e = list_begin(&t->cLinks); e != list_end(&t->cLinks); e = list_next(e))
-    {
-      struct link *link = list_entry(e, struct link, elem);
-
-      lock_acquire(&link->lock);
-
-      /* If the child is still alive and not the exception, return true */
-      if (link->child != NULL && link->child_tid != except)
-        {
-          lock_release(&link->lock);
-          lock_release(&t->cLinks_lock);
-          return true;
-        }
-
-      lock_release(&link->lock);
-    }
-  lock_release(&t->cLinks_lock);
-  return false;
 }
 
 /* Destructor function for the file descriptor hash table. */
@@ -321,9 +277,11 @@ process_exit (void)
 	  lock_release (&filesys_lock);
 	}
 
+  /* Print the exit status */
   printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
-  /* Clean up the child links */
+  /* Clean up the child links by either freeing them if the child has
+     already exited, or setting the link->parent to NULL otherwise. */
   lock_acquire(&cur->cLinks_lock);
   struct list_elem *e = list_begin(&cur->cLinks);
   while (e != list_end(&cur->cLinks))
@@ -351,7 +309,6 @@ process_exit (void)
   
   /* Clean up the link between the current thread and the parent thread */
   struct link *link = cur->pLink;
-
   if (link != NULL)
     {
       lock_acquire(&link->lock);

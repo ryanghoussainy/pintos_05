@@ -246,10 +246,6 @@ thread_create (const char *name, int priority,
   list_push_back(&t_parent->cLinks, &t->pLink->elem);
   lock_release(&t_parent->cLinks_lock);
 
-  // if (t->pLink->load_status == LOAD_FAILED) {
-  //     return TID_ERROR;
-  // }
-
   /* Initialize the hash table for file descriptors */
   hash_init(&t->file_descriptors, fd_hash, fd_less, NULL);
 
@@ -597,11 +593,11 @@ create_link(struct thread *parent, struct thread *child)
   struct link *link = malloc(sizeof(struct link));
   ASSERT (link != NULL);
 
+  /* Initialise link's parent, child, child_tid, and exit_status */
   link->parent = parent;
   link->child = child;
   link->child_tid = child->tid;
   link->exit_status = -1;
-  link->load_status = LOAD_IN_PROGRESS;
   
   /* Initialise link's lock */
   lock_init(&link->lock);

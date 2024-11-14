@@ -8,7 +8,7 @@
 
 #define CONSOLE_INCR 400
 
-/* Lock used when handling files to ensure synchronisation. */
+/* Lock used when handling accessing the file system to ensure synchronisation. */
 struct lock filesys_lock;
 
 typedef int pid_t;
