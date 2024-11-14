@@ -80,7 +80,8 @@ process_execute (const char *command)
     return TID_ERROR;
   }
   strlcpy(command_name, command, strlen(command) + 1);
-  command_name = strtok_r(command_name, " ", &command_name);
+  char *save_ptr;
+  char *token = strtok_r(command_name, " ", &save_ptr);
 
   /* Denying writes to executables if file is in use. */
   // struct thread *cur = thread_current();
@@ -98,29 +99,23 @@ process_execute (const char *command)
   // lock_release(&filesys_lock);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (command_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR) {
-    palloc_free_page (fn_copy);
-    free(command_name);
-    return TID_ERROR;
-  }
+  tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
 
   /* Get link with child */
   struct link *child_link = valid_child_tid(tid);
   if (child_link == NULL) {
-    palloc_free_page (fn_copy);
-    free(command_name);
-    return TID_ERROR;
+    tid = TID_ERROR;
   }
 
   /* Wait for child to load */
   sema_down(&child_link->load_sema);
 
   if (child_link->load_status == LOAD_FAILED) {
-    palloc_free_page (fn_copy);
-    free(command_name);
-    return TID_ERROR;
+    tid = TID_ERROR;
   }
+
+  free(command_name);
+  palloc_free_page (fn_copy);
 
   return tid;
 }
