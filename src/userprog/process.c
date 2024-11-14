@@ -187,13 +187,16 @@ process_wait (tid_t child_tid)
   /* Get child link */
   struct link *child_link = valid_child_tid(child_tid);
 
-  /* If the child_tid is not a valid child of the current thread or 
-     we have already waited for this thread, return -1 */
+  /* If the child_tid is not a valid child of the current thread, return -1 */
   if (child_link == NULL)
     return -1;
 
   /* Get child thread */
   struct thread *child = child_link->child;
+
+  /* If the child has already been waited on, return -1 */
+  if (child != NULL && child->waited_on)
+    return -1;
 
   /* Wait for the child to exit */
   sema_down(&child_link->sema);
