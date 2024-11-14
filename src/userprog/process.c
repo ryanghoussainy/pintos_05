@@ -150,15 +150,22 @@ start_process (void *command_)
     }
 
   /* Limit number of arguments */
+  struct thread *cur = thread_current();
   if (argc > NUM_ARGS) {
     palloc_free_page (argv[0]);
+
+    lock_acquire(&cur->pLink->lock);
+    cur->pLink->load_status = LOAD_FAILED;
+    lock_release(&cur->pLink->lock);
+
+    sema_up(&cur->pLink->load_sema);
     exit(-1);
   }
 
+  /* Load the executable file */
   success = load (argv[0], &if_.eip, &if_.esp, argv, argc);
 
   /* Set the load status of the current thread */
-  struct thread *cur = thread_current();
   if (success)
     {
       lock_acquire(&cur->pLink->lock); 
