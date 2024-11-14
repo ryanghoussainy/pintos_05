@@ -117,6 +117,8 @@ process_execute (const char *command)
   sema_down(&child_link->load_sema);
 
   if (child_link->load_status == LOAD_FAILED) {
+    palloc_free_page (fn_copy);
+    free(command_name);
     return TID_ERROR;
   }
 
@@ -152,8 +154,6 @@ start_process (void *command_)
   /* Limit number of arguments */
   struct thread *cur = thread_current();
   if (argc > NUM_ARGS) {
-    palloc_free_page (argv[0]);
-
     lock_acquire(&cur->pLink->lock);
     cur->pLink->load_status = LOAD_FAILED;
     lock_release(&cur->pLink->lock);
@@ -176,8 +176,6 @@ start_process (void *command_)
     }
   else
     {
-      palloc_free_page (argv[0]);
-      
       lock_acquire(&cur->pLink->lock);
       cur->pLink->load_status = LOAD_FAILED;
       lock_release(&cur->pLink->lock);
@@ -297,6 +295,17 @@ has_children(struct thread *t, tid_t except)
   return false;
 }
 
+/* Destructor function for the file descriptor hash table. */
+static void
+fd_destroy(struct hash_elem *e, void *aux UNUSED)
+{
+  struct o_file *file = hash_entry(e, struct o_file, fd_elem);
+  lock_acquire(&filesys_lock);
+  file_close(file->file);
+  lock_release(&filesys_lock);
+  free(file);
+}
+
 /* Free the current process's resources. */
 void
 process_exit (void)
@@ -307,7 +316,7 @@ process_exit (void)
   enum intr_level old_level = intr_disable();
 
   /* Free hash table and containing data */
-  hash_destroy(&cur->file_descriptors, NULL);
+  hash_destroy(&cur->file_descriptors, fd_destroy);
 
   /* Allow write back to executable once exited */
 	if (cur->exec_file != NULL)
@@ -496,7 +505,6 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv, int a
   /* Open executable file. */
   lock_acquire(&filesys_lock);
   file = filesys_open (file_name);
-  lock_release(&filesys_lock);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -588,6 +596,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv, int a
 
  done:
   /* We arrive here whether the load is successful or not. */
+  lock_release(&filesys_lock);
   return success;
 }
 
