@@ -242,6 +242,13 @@ thread_create (const char *name, int priority,
 
   /* Initialize the link between parent and child */
   t->pLink = create_link(t_parent, t);
+  if (t->pLink == NULL)
+  {
+    palloc_free_page(t);
+    return TID_ERROR;
+  }
+
+  /* Add the child link to the parent's list of child links */
   lock_acquire(&t_parent->cLinks_lock);
   list_push_back(&t_parent->cLinks, &t->pLink->elem);
   lock_release(&t_parent->cLinks_lock);
@@ -591,7 +598,10 @@ create_link(struct thread *parent, struct thread *child)
 {
   /* Allocate memory for the link */
   struct link *link = malloc(sizeof(struct link));
-  ASSERT (link != NULL);
+  if (link == NULL)
+  {
+    return NULL;
+  }
 
   /* Initialise link's parent, child, child_tid, and exit_status */
   link->parent = parent;
