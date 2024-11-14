@@ -116,6 +116,10 @@ process_execute (const char *command)
   /* Wait for child to load */
   sema_down(&child_link->load_sema);
 
+  if (child_link->load_status == LOAD_FAILED) {
+    return TID_ERROR;
+  }
+
   return tid;
 }
 
@@ -310,8 +314,8 @@ process_exit (void)
 
   /* Clean up the child links */
   lock_acquire(&cur->cLinks_lock);
-  struct list_elem *e;
-  for (e = list_begin(&cur->cLinks); e != list_end(&cur->cLinks); e = list_next(e))
+  struct list_elem *e = list_begin(&cur->cLinks);
+  while (e != list_end(&cur->cLinks))
     {
       struct link *link = list_entry(e, struct link, elem);
 
@@ -322,12 +326,14 @@ process_exit (void)
       if (link->child == NULL)
         {
           lock_release(&link->lock);
+          e = list_next(e);
           free(link);
         }
       else
         {
           link->parent = NULL;
           lock_release(&link->lock);
+          e = list_next(e);
         }
     }
   lock_release(&cur->cLinks_lock);
