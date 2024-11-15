@@ -234,7 +234,7 @@ process_wait (tid_t child_tid)
 
   /* If the child_tid is not a valid child of the current thread, return -1 */
   if (child_link == NULL)
-    return -1;
+    return TID_ERROR;
 
   /* Wait for the child to exit */
   sema_down(&child_link->sema);

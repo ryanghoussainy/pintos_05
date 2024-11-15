@@ -1,8 +1,6 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 
-#define STATUS_ERR (-1)
-
 #include <stdbool.h>
 #include <stdlib.h>
 #include <lib/kernel/hash.h> 
@@ -13,6 +11,12 @@
 
 /* The maximum number of open files a process can have */
 #define MAX_OFILES 128
+
+/* Exit status when an error is encountered during syscall. */
+#define STATUS_ERR (-1)
+
+/* Return value for unsuccessful syscall. */
+#define RETURN_ERR (-1)
 
 /* Lock used when handling accessing the file system to ensure synchronisation. */
 struct lock filesys_lock;

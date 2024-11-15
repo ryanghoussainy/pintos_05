@@ -123,7 +123,7 @@ sys_exec(struct intr_frame *f)
 
   /* Return -1 if cmd_line is not valid */
   if (!validate_user_pointer(cmd_line)) {
-    f->eax = -1;
+    f->eax = RETURN_ERR;
     exit(STATUS_ERR);
     return;
   }
@@ -245,7 +245,7 @@ sys_open (struct intr_frame *f)
   /* Checks if file is NULL. */
   if (file == NULL || !validate_user_pointer(file)) 
   {
-    f->eax = -1;
+    f->eax = RETURN_ERR;
     exit(STATUS_ERR);
     return;
   }
@@ -256,7 +256,7 @@ sys_open (struct intr_frame *f)
   if (new_file == NULL) 
   {
     lock_release(&filesys_lock);
-    f->eax = -1;
+    f->eax = RETURN_ERR;
     return;
   }
 
@@ -266,7 +266,7 @@ sys_open (struct intr_frame *f)
   {
     file_close(new_file);
     lock_release(&filesys_lock);
-    f->eax = -1;
+    f->eax = RETURN_ERR;
     return;
   }
 
@@ -281,7 +281,7 @@ sys_open (struct intr_frame *f)
     file_close(new_file);
     free(cur_o_file);
     lock_release(&filesys_lock);
-    f->eax = -1;
+    f->eax = RETURN_ERR;
     return;
   }
 
@@ -304,7 +304,7 @@ sys_filesize (struct intr_frame *f)
   struct o_file *opened_file = get_o_file_from_fd(fd);
   if (opened_file == NULL) {
     lock_release(&filesys_lock);
-    f->eax = -1;
+    f->eax = RETURN_ERR;
     return;
   }
 
@@ -332,7 +332,7 @@ sys_read (struct intr_frame *f)
   /* Check if the file descriptor is valid. */
   if (fd == STDOUT_FILENO) {
     /* Cannot read from stdout. */
-    f->eax = -1;
+    f->eax = RETURN_ERR;
     return;
   } else if (fd == STDIN_FILENO) {
     /* Read from the keyboard into the buffer. */
@@ -349,7 +349,7 @@ sys_read (struct intr_frame *f)
     struct o_file *opened_file = get_o_file_from_fd(fd);
     if (opened_file == NULL) {
       lock_release(&filesys_lock);
-      f->eax = -1;
+      f->eax = RETURN_ERR;
       return;
     }
 
