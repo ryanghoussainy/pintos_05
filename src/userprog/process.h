@@ -10,6 +10,9 @@
 /* Maximum number of arguments that can be passed to a process. */
 #define MAX_ARGS 128
 
+/* Lowest fd number that can be assigned to a file descriptor. */
+#define BASE_FD 2
+
 tid_t process_execute (const char *command);
 struct o_file *get_o_file_from_fd(int fd);
 int process_wait (tid_t);

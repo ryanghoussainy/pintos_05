@@ -31,7 +31,7 @@ static int num_args(const char *command);
 struct o_file *
 get_o_file_from_fd(int fd) {
     /* Check if input fd is valid. */
-    if (fd < 2) {
+    if (fd < BASE_FD) {
         return NULL;
     }
 

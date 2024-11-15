@@ -710,7 +710,7 @@ init_thread (struct thread *t, const char *name, int priority)
 #ifdef USERPROG
   list_init(&t->cLinks);
   t->waited_on = false;
-  t->next_fd = 2;
+  t->next_fd = BASE_FD;
 #endif
 
   t->magic = THREAD_MAGIC;
