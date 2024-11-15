@@ -81,6 +81,7 @@ static bool thread_less(const struct list_elem *a_,
                         const struct list_elem *b_,
                         void *aux UNUSED);
 static void thread_calculate_priority(struct thread *t, void *aux UNUSED);
+static void thread_release_locks(void);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -380,6 +381,21 @@ get_thread_by_tid(tid_t tid)
   return NULL;
 }
 
+/* Releases all locks held by the current thread. */
+static void
+thread_release_locks(void)
+{
+  struct thread *cur = thread_current();
+
+  /* Release all locks */
+  struct list_elem *e;
+  for (e = list_begin(&cur->locks); e != list_end(&cur->locks); e = list_next(e))
+  {
+    struct lock *lock = list_entry(e, struct lock, elem);
+    lock_release(lock);
+  }
+}
+
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
 void
@@ -395,6 +411,7 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
+  thread_release_locks();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
