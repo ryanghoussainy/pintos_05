@@ -34,7 +34,6 @@ get_o_file_from_fd(int fd) {
     if (fd < BASE_FD) {
         return NULL;
     }
-
     struct thread *cur = thread_current();
 
     /* Get the corresponding opened file from the hash map. */
@@ -51,7 +50,6 @@ get_o_file_from_fd(int fd) {
 
     /* Else, return the file. */
     struct o_file *open_file = hash_entry(found_file_elem, struct o_file, fd_elem);
-  
     return open_file;
 }
 

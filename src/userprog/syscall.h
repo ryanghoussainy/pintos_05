@@ -6,6 +6,7 @@
 #include <lib/kernel/hash.h> 
 #include <threads/interrupt.h>
 
+/* Maximum chunk size of data that can be written to the console. */
 #define CONSOLE_INCR 400
 
 /* The maximum number of open files a process can have */
@@ -17,8 +18,8 @@ struct lock filesys_lock;
 typedef int pid_t;
 typedef void (*syscall_func_t)(struct intr_frame *f);
 
+/* Defintions for retrieivng return address and arguments from stack frame. */
 #define ARG_STEP 4
-
 #define ret_address(x) (x)
 #define get_arg_1(x) ((x) + ARG_STEP)
 #define get_arg_2(x) ((x) + (2 * ARG_STEP))
