@@ -25,6 +25,8 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
 static struct link *valid_child_tid(tid_t child_tid);
 static void fd_destroy(struct hash_elem *e, void *aux UNUSED);
+static void trim_command(const char *str, const char **start, const char **end);
+static int num_args(const char *command);
 
 struct o_file *
 get_o_file_from_fd(int fd) {
@@ -53,6 +55,58 @@ get_o_file_from_fd(int fd) {
     return open_file;
 }
 
+/* Trim leading and trailing whitespace from a string.
+   This does not modify the command string. It returns
+   pointers to the start and end of the trimmed string.
+   Usage:
+    char *start, *end;
+    trim(str, &start, &end);
+*/
+static void
+trim_command(const char *str, const char **start, const char **end)
+{
+  /* Find the start of the string */
+  *start = str;
+  while (**start == ' ')
+    (*start)++;
+
+  /* Find the end of the string */
+  *end = *start;
+  while (**end != '\0')
+    (*end)++;
+  (*end)--;
+
+  /* Trim trailing whitespace */
+  while (**end == ' ')
+    (*end)--;
+  (*end)++;
+}
+
+/* Count the number of arguments in a command string */
+static int
+num_args(const char *command)
+{
+  int argc = 0;
+
+  /* Trim leading and trailing whitespace */
+  const char *start, *end;
+  trim_command(command, &start, &end);
+
+  /* Iterate through the command string and count the number of space */
+  const char *c = start;
+  while (c < end) {
+    if (*c == ' ') {
+      /* Skip multiple spaces */
+      while (*c == ' ') {
+        c++;
+      }
+      argc++;
+    }
+    c++;
+  }
+  return argc + 1;
+}
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -65,6 +119,11 @@ process_execute (const char *command)
 
   /* Ensure arguments can fit on one page */
   if (strlen(command) + 1 >= PGSIZE) {
+    return TID_ERROR;
+  }
+
+  /* Ensure the number of arguments is less than MAX_ARGS */
+  if (num_args(command) > MAX_ARGS) {
     return TID_ERROR;
   }
 
@@ -133,23 +192,11 @@ start_process (void *command_)
       argc++;
     }
 
-  /* Limit number of arguments */
-  struct thread *cur = thread_current();
-  if (argc > MAX_ARGS) {
-    /* Get link lock and set load status */
-    lock_acquire(&cur->pLink->lock);
-    cur->pLink->load_status = LOAD_FAILED;
-    lock_release(&cur->pLink->lock);
-
-    /* Signal parent that load has failed */
-    sema_up(&cur->pLink->load_sema);
-    exit(-1);
-  }
-
   /* Load the executable file */
   success = load (argv[0], &if_.eip, &if_.esp, argv, argc);
 
   /* Set the load status of the current thread */
+  struct thread *cur = thread_current();
   lock_acquire(&cur->pLink->lock);
   cur->pLink->load_status = success ? LOAD_SUCCESS : LOAD_FAILED;
   lock_release(&cur->pLink->lock);
