@@ -454,6 +454,7 @@ static char *load_address_from_vaddr (void *vaddr)
 	return *((char **) vaddr);
 }
 
+/* Exits the current thread with the given status. */
 void
 exit(int status)
 {
