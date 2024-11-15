@@ -904,7 +904,7 @@ create_link(struct thread *parent, struct thread *child)
   link->parent = parent;
   link->child = child;
   link->child_tid = child->tid;
-  link->exit_status = -1;
+  link->exit_status = STATUS_ERR;
   
   /* Initialise link's lock */
   lock_init(&link->lock);

@@ -232,9 +232,9 @@ process_wait (tid_t child_tid)
   /* Get child link */
   struct link *child_link = valid_child_tid(child_tid);
 
-  /* If the child_tid is not a valid child of the current thread, return -1 */
+  /* Exit if the child_tid is not a valid child of the current thread */
   if (child_link == NULL)
-    return TID_ERROR;
+    return STATUS_ERR;
 
   /* Wait for the child to exit */
   sema_down(&child_link->sema);

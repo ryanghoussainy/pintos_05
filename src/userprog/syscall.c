@@ -121,7 +121,7 @@ sys_exec(struct intr_frame *f)
   /* Load the command line from the stack. */
   const char *cmd_line = load_address_from_vaddr(get_arg_1(f->esp));
 
-  /* Return -1 if cmd_line is not valid */
+  /* Exit if cmd_line is not valid */
   if (!validate_user_pointer(cmd_line)) {
     f->eax = RETURN_ERR;
     exit(STATUS_ERR);
@@ -275,7 +275,7 @@ sys_open (struct intr_frame *f)
   cur_o_file->fd = cur->next_fd++;
   cur_o_file->file = new_file;
 
-  /* If the file descriptor is greater than the maximum number of files, return -1. */
+  /* Exit if the file descriptor is greater than the maximum number of files */
   if (cur_o_file->fd >= MAX_OFILES) 
   {
     file_close(new_file);
