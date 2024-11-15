@@ -311,8 +311,6 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  enum intr_level old_level = intr_disable();
-
   /* Free hash table and containing data */
   hash_destroy(&cur->file_descriptors, fd_destroy);
 
@@ -373,8 +371,6 @@ process_exit (void)
           sema_up(&link->sema);
         }
     }
-
-  intr_set_level(old_level); 
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
