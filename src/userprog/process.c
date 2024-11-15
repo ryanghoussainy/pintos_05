@@ -273,7 +273,6 @@ valid_child_tid(tid_t child_tid)
   struct thread *parent = thread_current();
   
   /* Iterate through the parent's list of child links. */
-  lock_acquire(&parent->cLinks_lock);
   struct list_elem *e;
   for (e = list_begin(&parent->cLinks); e != list_end(&parent->cLinks); e = list_next(e))
     {
@@ -285,13 +284,11 @@ valid_child_tid(tid_t child_tid)
       if (link->child_tid == child_tid)
         {
           lock_release(&link->lock);
-          lock_release(&parent->cLinks_lock);
           return link;
         }
 
       lock_release(&link->lock);
     }
-  lock_release(&parent->cLinks_lock);
 
   return NULL;
 }
@@ -332,7 +329,6 @@ process_exit (void)
 
   /* Clean up the child links by either freeing them if the child has
      already exited, or setting the link->parent to NULL otherwise. */
-  lock_acquire(&cur->cLinks_lock);
   struct list_elem *e = list_begin(&cur->cLinks);
   while (e != list_end(&cur->cLinks))
     {
@@ -355,7 +351,6 @@ process_exit (void)
           e = list_next(e);
         }
     }
-  lock_release(&cur->cLinks_lock);
   
   /* Clean up the link between the current thread and the parent thread */
   struct link *link = cur->pLink;
