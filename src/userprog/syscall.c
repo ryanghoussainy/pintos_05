@@ -77,7 +77,7 @@ syscall_handler (struct intr_frame *f)
       !validate_user_pointer(get_arg_3(f->esp))) 
   {
     /* Terminate process since the given pointer (user or stack) is invalid */
-    exit(-1);
+    exit(STATUS_ERR);
     return;
   }
 
@@ -87,7 +87,7 @@ syscall_handler (struct intr_frame *f)
   /* Ensure that the syscall number is valid. */
   if (syscall_num < 0 || syscall_num >= NUM_SYSCALLS) 
   {
-    exit(-1);
+    exit(STATUS_ERR);
     return;
   }
 
@@ -124,7 +124,7 @@ sys_exec(struct intr_frame *f)
   /* Return -1 if cmd_line is not valid */
   if (!validate_user_pointer(cmd_line)) {
     f->eax = -1;
-    exit(-1);
+    exit(STATUS_ERR);
     return;
   }
   f->eax = process_execute(cmd_line); 
@@ -150,7 +150,7 @@ sys_write (struct intr_frame *f)
 
   /* Checks if buffer is valid. */
   if (!is_valid_user_address_range(buffer, size)) {
-    exit(-1);
+    exit(STATUS_ERR);
     return;
   }
 
@@ -180,7 +180,7 @@ sys_write (struct intr_frame *f)
   /* Checks if file is NULL. */
   if (opened_file == NULL) {
     lock_release(&filesys_lock);
-    exit(-1);
+    exit(STATUS_ERR);
     return;
   }
 
@@ -201,7 +201,7 @@ sys_create (struct intr_frame *f)
   /* Checks if file is NULL. */
   if (file == NULL || !validate_user_pointer(file)) {
     f->eax = false;
-    exit(-1);
+    exit(STATUS_ERR);
     return;
   }
 
@@ -246,7 +246,7 @@ sys_open (struct intr_frame *f)
   if (file == NULL || !validate_user_pointer(file)) 
   {
     f->eax = -1;
-    exit(-1);
+    exit(STATUS_ERR);
     return;
   }
 
@@ -325,7 +325,7 @@ sys_read (struct intr_frame *f)
 
   /* Checks if buffer is valid. */
   if (!is_valid_user_address_range(buffer, size)) {
-    exit(-1);
+    exit(STATUS_ERR);
     return;
   }
 

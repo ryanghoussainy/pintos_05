@@ -1,6 +1,8 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 
+#define STATUS_ERR (-1)
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <lib/kernel/hash.h> 

@@ -204,7 +204,7 @@ start_process (void *command_)
 
   /* If load failed, quit. */
   if (!success) {
-    exit(-1);
+    exit(STATUS_ERR);
   }
 
   /* Start the user process by simulating a return from an
