@@ -607,35 +607,6 @@ sort_ready_list(void)
   list_sort(&ready_list, thread_more, NULL);
 }
 
-/* Creates a link between a parent thread and a child thread. */
-struct link *
-create_link(struct thread *parent, struct thread *child)
-{
-  /* Allocate memory for the link */
-  struct link *link = malloc(sizeof(struct link));
-  if (link == NULL)
-  {
-    return NULL;
-  }
-
-  /* Initialise link's parent, child, child_tid, and exit_status */
-  link->parent = parent;
-  link->child = child;
-  link->child_tid = child->tid;
-  link->exit_status = -1;
-  
-  /* Initialise link's lock */
-  lock_init(&link->lock);
-
-  /* Initialise link's semaphore */
-  sema_init(&link->sema, 0);
-
-  /* Initialise link's load semaphore */
-  sema_init(&link->load_sema, 0);
- 
-  return link;
-}
-
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -915,5 +886,35 @@ bool fd_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNU
   const struct o_file *fd_a = hash_entry(a, struct o_file, fd_elem);
   const struct o_file *fd_b = hash_entry(b, struct o_file, fd_elem);
   return fd_a->fd < fd_b->fd;
+}
+
+
+/* Creates a link between a parent thread and a child thread. */
+struct link *
+create_link(struct thread *parent, struct thread *child)
+{
+  /* Allocate memory for the link */
+  struct link *link = malloc(sizeof(struct link));
+  if (link == NULL)
+  {
+    return NULL;
+  }
+
+  /* Initialise link's parent, child, child_tid, and exit_status */
+  link->parent = parent;
+  link->child = child;
+  link->child_tid = child->tid;
+  link->exit_status = -1;
+  
+  /* Initialise link's lock */
+  lock_init(&link->lock);
+
+  /* Initialise link's semaphore */
+  sema_init(&link->sema, 0);
+
+  /* Initialise link's load semaphore */
+  sema_init(&link->load_sema, 0);
+ 
+  return link;
 }
 #endif

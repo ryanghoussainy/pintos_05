@@ -117,6 +117,7 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
+#ifdef USERPROG
 /* Link struct between parent thread and child thread */
 struct link
 {
@@ -133,6 +134,12 @@ struct link
         LOAD_FAILED
     } load_status;                      
 };
+
+struct link *create_link(struct thread *parent, struct thread *child);
+unsigned fd_hash(const struct hash_elem *e, void *aux UNUSED);
+bool fd_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+
+#endif
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -177,10 +184,6 @@ void thread_calculate_load_avg(void);
 
 void sort_ready_list(void);
 
-struct link *create_link(struct thread *parent, struct thread *child);
-
 bool thread_more(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
-unsigned fd_hash(const struct hash_elem *e, void *aux UNUSED);
-bool fd_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
 
 #endif /* threads/thread.h */
