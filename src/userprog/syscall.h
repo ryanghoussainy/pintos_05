@@ -8,6 +8,9 @@
 
 #define CONSOLE_INCR 400
 
+/* The maximum number of open files a process can have */
+#define MAX_OFILES 128
+
 /* Lock used when handling accessing the file system to ensure synchronisation. */
 struct lock filesys_lock;
 

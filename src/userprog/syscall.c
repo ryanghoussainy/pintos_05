@@ -275,6 +275,16 @@ sys_open (struct intr_frame *f)
   cur_o_file->fd = cur->next_fd++;
   cur_o_file->file = new_file;
 
+  /* If the file descriptor is greater than the maximum number of files, return -1. */
+  if (cur_o_file->fd >= MAX_OFILES) 
+  {
+    file_close(new_file);
+    free(cur_o_file);
+    lock_release(&filesys_lock);
+    f->eax = -1;
+    return;
+  }
+
   /* Inserts the file descriptor into the hash table of running process. */
   hash_insert(&cur->file_descriptors, &cur_o_file->fd_elem);
 
