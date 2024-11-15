@@ -249,9 +249,7 @@ thread_create (const char *name, int priority,
   }
 
   /* Add the child link to the parent's list of child links */
-  lock_acquire(&t_parent->cLinks_lock);
   list_push_back(&t_parent->cLinks, &t->pLink->elem);
-  lock_release(&t_parent->cLinks_lock);
 
   /* Initialize the hash table for file descriptors */
   hash_init(&t->file_descriptors, fd_hash, fd_less, NULL);
@@ -711,7 +709,6 @@ init_thread (struct thread *t, const char *name, int priority)
 
 #ifdef USERPROG
   list_init(&t->cLinks);
-  lock_init(&t->cLinks_lock);
   t->waited_on = false;
   t->next_fd = 2;
 #endif
