@@ -236,21 +236,8 @@ process_wait (tid_t child_tid)
   if (child_link == NULL)
     return -1;
 
-  /* Get child thread */
-  struct thread *child = child_link->child;
-
-  /* If the child has already been waited on, return -1 */
-  if (child != NULL && child->waited_on)
-    return -1;
-
   /* Wait for the child to exit */
   sema_down(&child_link->sema);
-
-  /* Set the child's waited_on flag to true if child is still alive */
-  if (child != NULL)
-  {
-    child->waited_on = true;
-  }
 
   /* Get the exit status of the child */
   int exit_status = child_link->exit_status;

@@ -107,7 +107,6 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct link *pLink;                 /* Link to parent link */
     struct list cLinks;                 /* List of child links */
-    bool waited_on;                     /* Whether the thread has been waited on */
     int exit_status;                    /* Exit status of the thread */
     struct hash file_descriptors;       /* Pointer to hash table of file_descriptor structures */
     int next_fd;                        /* Tracks the next available fd number */
