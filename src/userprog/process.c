@@ -240,7 +240,9 @@ process_wait (tid_t child_tid)
   sema_down(&child_link->sema);
 
   /* Get the exit status of the child */
+  lock_acquire(&child_link->lock);
   int exit_status = child_link->exit_status;
+  lock_release(&child_link->lock);
 
   /* Remove the link between the parent and child */
   list_remove(&child_link->elem);
@@ -330,8 +332,8 @@ process_exit (void)
       else
         {
           link->parent = NULL;
-          lock_release(&link->lock);
           e = list_next(e);
+          lock_release(&link->lock);
         }
     }
   
@@ -352,8 +354,8 @@ process_exit (void)
         {
           link->child = NULL;
           link->exit_status = cur->exit_status;
-          lock_release(&link->lock);
           sema_up(&link->sema);
+          lock_release(&link->lock);
         }
     }
 
