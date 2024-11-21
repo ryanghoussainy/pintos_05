@@ -1,9 +1,17 @@
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include "lib/string.h"
 #include "userprog/gdt.h"
+#include "userprog/syscall.h"
+#include "userprog/process.h"
+#include "userprog/pagedir.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "filesys/file.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -134,7 +142,48 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
+  void *fault_page = pg_round_down(fault_addr);
 
+  /* Get faulting page in supplemental page table */
+  struct thread *cur = thread_current();
+  struct hash_elem *e = hash_find (&cur->pg_table, (struct hash_elem *)&fault_addr);
+  if (e == NULL) {
+    goto page_fault;
+  }
+  struct page *p = hash_entry (e, struct page, elem);
+
+  /* Obtain a frame to store the page */
+  void *frame = frame_alloc(PAL_USER, p->vaddr);
+  if (frame == NULL) {
+    PANIC("Out of memory: Frame allocation failed.");
+  }
+
+  /* Load the page into the frame */
+  if (p->file != NULL) {
+      lock_acquire(&filesys_lock);
+      file_seek(p->file, p->offset);
+      if (file_read(p->file, frame, p->read_bytes) != (int) p->read_bytes) {
+         frame_free(frame);
+         lock_release(&filesys_lock);
+         goto page_fault;
+      }
+      lock_release(&filesys_lock);
+      memset(frame + p->read_bytes, 0, PGSIZE - p->read_bytes);
+   } else {
+      memset(frame, 0, PGSIZE);
+   }
+
+  /* Add the page to the process's address space */
+  pagedir_set_page(cur->pagedir, p->vaddr, frame, p->writable);
+
+  if (!install_page(fault_page, frame, p->writable)) {
+      frame_free(frame);
+      goto page_fault;
+  }
+
+   return;
+
+page_fault:
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();

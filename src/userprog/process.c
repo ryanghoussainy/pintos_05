@@ -21,6 +21,7 @@
 #include "threads/malloc.h"
 #include "userprog/syscall.h"
 #include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
@@ -583,8 +584,6 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv, int a
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
-
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
 static bool
@@ -663,37 +662,18 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       
       /* Check if virtual page already allocated */
       struct thread *t = thread_current ();
-      uint8_t *kpage = pagedir_get_page (t->pagedir, upage);
       
-      if (kpage == NULL){
-        
-        /* Get a new page of memory. */
-        kpage = frame_alloc(PAL_USER, upage);
-        if (kpage == NULL){
-          return false;
-        }
-        
-        /* Add the page to the process's address space. */
-        if (!install_page (upage, kpage, writable)) 
-        {
-          frame_free(kpage);
-          return false; 
-        }     
-        
-      } else {
-        
-        /* Check if writable flag for the page should be updated */
-        if(writable && !pagedir_is_writable(t->pagedir, upage)){
-          pagedir_set_writable(t->pagedir, upage, writable); 
-        }
-        
+      /* Add page to supplemental page table */
+      struct page *pg = malloc(sizeof(struct page));
+      if (pg == NULL) {
+        return false;
       }
-
-      /* Load data into the page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
-        return false; 
-      }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+      pg->vaddr = upage;
+      pg->file = file;
+      pg->offset = ofs;
+      pg->read_bytes = page_read_bytes;
+      pg->writable = writable;
+      hash_insert(&t->pg_table, &pg->elem);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -777,7 +757,7 @@ setup_stack (void **esp, char **argv, int argc)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
+bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();

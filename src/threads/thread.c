@@ -17,6 +17,9 @@
 #include "lib/kernel/hash.h"
 #include "threads/malloc.h"
 #endif
+#ifdef VM
+#include "vm/page.h"
+#endif
 
 
 /* Random value for struct thread's `magic' member.
@@ -255,6 +258,10 @@ thread_create (const char *name, int priority,
   /* Initialize the hash table for file descriptors */
   hash_init(&t->file_descriptors, fd_hash, fd_less, NULL);
 
+#endif
+
+#ifdef VM
+  hash_init(&t->pg_table, page_hash, page_less, NULL);
 #endif
 
   if (thread_mlfqs)

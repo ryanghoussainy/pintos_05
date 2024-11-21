@@ -1,4 +1,5 @@
 #include "vm/frame.h"
+#include "vm/page.h"
 
 static unsigned
 frame_hash(const struct hash_elem *elem, void *aux UNUSED) {
@@ -21,6 +22,7 @@ frame_table_init(void) {
 
 void *
 frame_alloc(enum palloc_flags pal, uint8_t *page) {
+    struct thread *cur = thread_current();
 
     void *frame = palloc_get_page(pal);
     if (frame == NULL) {
@@ -37,7 +39,7 @@ frame_alloc(enum palloc_flags pal, uint8_t *page) {
 
     f->addr = frame;
     f->page = page;
-    f->owner = thread_current();
+    f->owner = cur;
     f->pinned = false;
 
     lock_acquire(&frame_lock);

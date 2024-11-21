@@ -111,6 +111,9 @@ struct thread
     struct hash file_descriptors;       /* Pointer to hash table of file_descriptor structures */
     int next_fd;                        /* Tracks the next available fd number */
     struct file *exec_file;             /* Executable file of the thread */
+
+    /* vm */
+    struct hash pg_table;               /* Supplemental page table */
 #endif
 
     /* Owned by thread.c. */
