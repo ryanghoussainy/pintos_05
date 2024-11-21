@@ -33,6 +33,7 @@
 #endif
 #ifdef VM
 #include "devices/swap.h"
+#include "vm/frame.h"
 #endif
 #ifdef FILESYS
 #include "devices/block.h"
@@ -101,6 +102,9 @@ main (void)
   palloc_init (user_page_limit);
   malloc_init ();
   paging_init ();
+#ifdef USERPROG
+  frame_table_init();
+#endif
 
   /* Segmentation. */
 #ifdef USERPROG
