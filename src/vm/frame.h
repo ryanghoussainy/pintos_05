@@ -5,6 +5,7 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
+#include "userprog/pagedir.h"
 
 struct frame {
     void *addr;        // Address of the frame.

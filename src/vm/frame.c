@@ -63,6 +63,7 @@ frame_free(void *frame_addr) {
 
     struct frame *f_entry = hash_entry(e, struct frame, elem);
     hash_delete(&frame_table, &f_entry->elem);
+    pagedir_clear_page(f_entry->owner->pagedir, f_entry->page);
     palloc_free_page(f_entry->addr);
     free(f_entry);
 

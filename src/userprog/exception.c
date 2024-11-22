@@ -142,41 +142,46 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
+
+  /* Turn interrupts back on (they were only off so that we could
+     be assured of reading CR2 before it changed). */
+  intr_enable ();
+
   void *fault_page = pg_round_down(fault_addr);
 
   /* Get faulting page in supplemental page table */
   struct thread *cur = thread_current();
-  struct hash_elem *e = hash_find (&cur->pg_table, (struct hash_elem *)&fault_addr);
+  struct page p;
+  p.vaddr = fault_page;
+  struct hash_elem *e = hash_find (&cur->pg_table, &p.elem);
   if (e == NULL) {
     goto page_fault;
   }
-  struct page *p = hash_entry (e, struct page, elem);
+  struct page *found_page = hash_entry (e, struct page, elem);
 
   /* Obtain a frame to store the page */
-  void *frame = frame_alloc(PAL_USER, p->vaddr);
+  void *frame = frame_alloc(PAL_USER, found_page->vaddr);
   if (frame == NULL) {
     PANIC("Out of memory: Frame allocation failed.");
   }
 
   /* Load the page into the frame */
-  if (p->file != NULL) {
+  if (found_page->file != NULL) {
       lock_acquire(&filesys_lock);
-      file_seek(p->file, p->offset);
-      if (file_read(p->file, frame, p->read_bytes) != (int) p->read_bytes) {
+      // file_seek(found_page->file, found_page->offset);
+      file_read_at(found_page->file, frame, found_page->read_bytes, found_page->offset);
+      if (file_read_at(found_page->file, frame, found_page->read_bytes, found_page->offset) != (int) found_page->read_bytes) {
          frame_free(frame);
          lock_release(&filesys_lock);
          goto page_fault;
       }
       lock_release(&filesys_lock);
-      memset(frame + p->read_bytes, 0, PGSIZE - p->read_bytes);
-   } else {
+      memset(frame + found_page->read_bytes, 0, PGSIZE - found_page->read_bytes);
+  } else {
       memset(frame, 0, PGSIZE);
    }
 
-  /* Add the page to the process's address space */
-  pagedir_set_page(cur->pagedir, p->vaddr, frame, p->writable);
-
-  if (!install_page(fault_page, frame, p->writable)) {
+  if (!install_page(fault_page, frame, found_page->writable)) {
       frame_free(frame);
       goto page_fault;
   }
@@ -184,10 +189,6 @@ page_fault (struct intr_frame *f)
    return;
 
 page_fault:
-  /* Turn interrupts back on (they were only off so that we could
-     be assured of reading CR2 before it changed). */
-  intr_enable ();
-
   /* Count page faults. */
   page_fault_cnt++;
 

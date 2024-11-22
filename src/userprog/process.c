@@ -27,6 +27,7 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
 static struct link *valid_child_tid(tid_t child_tid);
 static void fd_destroy(struct hash_elem *e, void *aux UNUSED);
+static void page_destroy(struct hash_elem *e, void *aux UNUSED);
 static void trim_command(const char *str, const char **start, const char **end);
 static int num_args(const char *command);
 
@@ -293,6 +294,13 @@ fd_destroy(struct hash_elem *e, void *aux UNUSED)
   free(file);
 }
 
+static void
+page_destroy(struct hash_elem *e, void *aux UNUSED)
+{
+  struct page *p = hash_entry(e, struct page, elem);
+  free(p);
+}
+
 /* Free the current process's resources. */
 void
 process_exit (void)
@@ -302,6 +310,7 @@ process_exit (void)
 
   /* Free hash table and containing data */
   hash_destroy(&cur->file_descriptors, fd_destroy);
+  hash_destroy(&cur->pg_table, page_destroy);
 
   /* Allow write back to executable once exited */
 	if (cur->exec_file != NULL)
@@ -651,7 +660,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
-  file_seek (file, ofs);
+  // file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -679,6 +688,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+
+      ofs += PGSIZE;
     }
   return true;
 }
