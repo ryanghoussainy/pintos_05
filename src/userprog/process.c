@@ -298,6 +298,15 @@ static void
 page_destroy(struct hash_elem *e, void *aux UNUSED)
 {
   struct page *p = hash_entry(e, struct page, elem);
+
+  /* Free the frame if it is in memory */
+  void *frame = pagedir_get_page(thread_current()->pagedir, p->vaddr);
+  if (frame != NULL)
+    {
+      frame_free(frame);
+    }
+
+  /* Free the page */
   free(p);
 }
 
