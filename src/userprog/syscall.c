@@ -33,7 +33,10 @@ static void sys_write (struct intr_frame *f);
 static void sys_seek (struct intr_frame *f);
 static void sys_tell (struct intr_frame *f);
 static void sys_close (struct intr_frame *f);
+static void sys_mmap (struct intr_frame *f);
+static void sys_munmap (struct intr_frame *f);
 
+static struct mapid_file *get_mmap_file_from_mapid(int mapid);
 static bool validate_user_pointer(const void *ptr);
 static uint32_t load_number_from_vaddr (void *vaddr);
 static char *load_address_from_vaddr (void *vaddr);
@@ -66,6 +69,8 @@ init_syscalls_table(void)
   syscall_table[SYS_SEEK] = sys_seek;
   syscall_table[SYS_TELL] = sys_tell;
   syscall_table[SYS_CLOSE] = sys_close;
+  syscall_table[SYS_MMAP] = sys_mmap;
+  syscall_table[SYS_MUNMAP] = sys_munmap;
 }
 
 static void
@@ -429,6 +434,104 @@ sys_close (struct intr_frame *f)
   lock_release(&filesys_lock);
 }
 
+/* Maps the file open as fd into the process's virtual address space. */
+static void
+sys_mmap (struct intr_frame *f) 
+{
+  /* Loads the file descriptor and address from the stack. */
+  int fd = load_number_from_vaddr(get_arg_1(f->esp));
+  void *addr = load_address_from_vaddr(get_arg_2(f->esp));
+
+  /* Check if the file descriptor is valid. */
+  if (fd == STDOUT_FILENO || fd == STDIN_FILENO) {
+    f->eax = RETURN_ERR;
+    return;
+  }
+
+  /* Check if the address is valid. */
+  if (addr == NULL || addr == 0 || addr >= PHYS_BASE || (uintptr_t)addr % PGSIZE != 0) {
+    f->eax = RETURN_ERR;
+    return;
+  }
+
+  /* Get the opened file from the file descriptor. */
+  struct o_file *open_file = get_o_file_from_fd(fd);
+  if (open_file == NULL) {
+    f->eax = RETURN_ERR;
+    return;
+  }
+
+  struct file *file = file_reopen(open_file->file);
+
+  /* Get the file length. */
+  int length = file_length(open_file->file);
+
+  /* Check if the length is 0. */
+  if (length == 0) {
+    f->eax = RETURN_ERR;
+    return;
+  }
+
+  /* Create a new memory mapped file. */
+  struct mapid_file *new_mapid_file = malloc(sizeof(struct mapid_file));
+  if (new_mapid_file == NULL) {
+    f->eax = RETURN_ERR;
+    return;
+  }
+
+  /* Set the mapid and file. */
+  struct thread *cur = thread_current();
+  new_mapid_file->mapid = cur->next_mapid++;
+  new_mapid_file->file = file;
+  hash_insert(&cur->mmap_table, &new_mapid_file->mapid_elem);
+
+  /* Return the mapping ID. */
+  f->eax = new_mapid_file->mapid;
+}
+
+/* Unmaps the memory mapped file from the process's virtual address space. */
+static void
+sys_munmap (struct intr_frame *f) 
+{
+  /* Load the mapping ID from the stack. */
+  int mapid = load_number_from_vaddr(get_arg_1(f->esp));
+
+  /* Get the memory mapped file from the mapping ID. */
+  struct mapid_file *mmap_file = get_mmap_file_from_mapid(mapid);
+  if (mmap_file == NULL) {
+    return;
+  }
+
+  /* Remove the memory mapped file from the hash table. */
+  hash_delete(&thread_current()->mmap_table, &mmap_file->mapid_elem);
+
+  /* Close the file. */
+  file_close(mmap_file->file);
+
+  /* Free the memory mapped file. */
+  free(mmap_file);
+}
+
+/* Get the memory mapped file from the mapping ID. */
+static struct mapid_file *
+get_mmap_file_from_mapid(int mapid) 
+{
+  /* Set the mapping ID. */
+  struct mapid_file search_mapid_file;
+  search_mapid_file.mapid = mapid;
+
+  /* Search for the memory mapped file in the hash table. */
+  struct thread *cur = thread_current();
+  struct hash_elem *found_mapid_elem = hash_find(&cur->mmap_table, &search_mapid_file.mapid_elem);
+  if (found_mapid_elem == NULL) {
+    return NULL;
+  }
+
+  /* Return the memory mapped file. */
+  struct mapid_file *mmap_file = hash_entry(found_mapid_elem, struct mapid_file, mapid_elem);
+  return mmap_file;
+}
+
 /*  Take in a user pointer and check that it is valid, i.e:
   1. Is not NULL
   2. Points to unmapped virtual memory
@@ -473,4 +576,19 @@ static bool is_valid_user_address_range(const void *start, unsigned size) {
     addr++;
   }
   return true;
+}
+
+/* Hash function for memory mapped files. */
+unsigned
+mmap_hash(const struct hash_elem *e, void *aux UNUSED) {
+  const struct mapid_file *mf = hash_entry(e, struct mapid_file, mapid_elem);
+  return hash_int(mf->mapid);
+}
+
+/* Comparison function for memory mapped files. */
+bool
+mmap_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
+  const struct mapid_file *mf_a = hash_entry(a, struct mapid_file, mapid_elem);
+  const struct mapid_file *mf_b = hash_entry(b, struct mapid_file, mapid_elem);
+  return mf_a->mapid < mf_b->mapid;
 }

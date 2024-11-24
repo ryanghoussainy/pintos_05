@@ -28,6 +28,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, char **a
 static struct link *valid_child_tid(tid_t child_tid);
 static void fd_destroy(struct hash_elem *e, void *aux UNUSED);
 static void page_destroy(struct hash_elem *e, void *aux UNUSED);
+static void mapping_destroy(struct hash_elem *e, void *aux UNUSED);
 static void trim_command(const char *str, const char **start, const char **end);
 static int num_args(const char *command);
 
@@ -294,11 +295,20 @@ fd_destroy(struct hash_elem *e, void *aux UNUSED)
   free(file);
 }
 
+/* Destructor function for the page table hash table. */
 static void
 page_destroy(struct hash_elem *e, void *aux UNUSED)
 {
   struct page *p = hash_entry(e, struct page, elem);
   free(p);
+}
+
+/* Destructor function for the mapping hash table. */
+static void
+mapping_destroy(struct hash_elem *e, void *aux UNUSED)
+{
+  struct mapping *m = hash_entry(e, struct mapid_file, mapid_elem);
+  free(m);
 }
 
 /* Free the current process's resources. */
@@ -311,6 +321,7 @@ process_exit (void)
   /* Free hash table and containing data */
   hash_destroy(&cur->file_descriptors, fd_destroy);
   hash_destroy(&cur->pg_table, page_destroy);
+  hash_destroy(&cur->mmap_table, mapping_destroy);
 
   /* Allow write back to executable once exited */
 	if (cur->exec_file != NULL)

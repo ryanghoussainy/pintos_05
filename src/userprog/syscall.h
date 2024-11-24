@@ -40,7 +40,18 @@ struct o_file {
     struct hash_elem fd_elem;   /* To put open files in a hash table of the process */
 };
 
+/*
+ * Contains a memory mapped file.
+ */
+struct mapid_file {
+    int mapid;                  /* The mapid */
+    struct file *file;          /* Contents of loaded file */
+    struct hash_elem mapid_elem;/* To put open files in a hash table of the process */
+};
+
 void syscall_init (void);
-void exit(int status);  
+void exit(int status);
+unsigned mmap_hash(const struct hash_elem *e, void *aux);
+bool mmap_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);  
 
 #endif /* userprog/syscall.h */
