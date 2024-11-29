@@ -71,14 +71,20 @@ init_syscalls_table(void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
+  bool arg_1_valid = validate_user_pointer(get_arg_1(f->esp));
+  bool arg_2_valid = validate_user_pointer(get_arg_2(f->esp));
+  bool arg_3_valid = validate_user_pointer(get_arg_3(f->esp));
 
-  if (!validate_user_pointer(get_arg_1(f->esp)) || 
-      !validate_user_pointer(get_arg_2(f->esp)) ||
-      !validate_user_pointer(get_arg_3(f->esp))) 
+  if (!arg_1_valid || !arg_2_valid || !arg_3_valid) 
   {
-    /* Terminate process since the given pointer (user or stack) is invalid */
-    exit(STATUS_ERR);
-    return;
+    /* Stack may not be large enough, so potentially grow */
+    bool stack_has_growed = frame_alloc_stack(f->esp, get_arg_3(f->esp));
+
+    if (!stack_has_growed) {
+      /* Terminate process since the given pointer (user or stack) is invalid */
+      exit(STATUS_ERR);
+      return;
+    }
   }
 
   /* Load the syscall number from the stack. */

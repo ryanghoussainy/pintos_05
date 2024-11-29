@@ -759,6 +759,51 @@ setup_stack (void **esp, char **argv, int argc)
   return success;
 }
 
+/* Allocate a new page to the stack,
+   where faddr is the fault address
+*/
+bool
+frame_alloc_stack(void *esp, void* faddr) {
+
+  if (esp == NULL) {
+    // May be called before stack has been set up, if so handle case
+    return false;
+  }
+
+  uint8_t *kpage;
+
+  // Calculates current pages left until max stack size is reached
+  int cur_pages_left = STACK_MAX_SIZE - ((uintptr_t)(PHYS_BASE - (uintptr_t)esp) / PGSIZE);
+
+  // New page if the fault address is within bounds of the stack and pages can still be created
+  if (faddr <= esp && faddr > (PHYS_BASE - (STACK_MAX_SIZE * PGSIZE)) && cur_pages_left > 0) {
+
+    bool success = false;
+
+    void* new_stack_addr = pg_round_down(esp);
+
+    // Handle edge case when esp is at the page border
+    if (pg_ofs(esp) == 0) {
+      new_stack_addr = pg_round_down(esp - PGSIZE);
+    }
+
+    kpage = frame_alloc(PAL_USER | PAL_ZERO, new_stack_addr);
+
+    if (kpage != NULL) {
+
+      success = install_page (new_stack_addr, kpage, true);
+
+      if (!success) {
+        frame_free(kpage);
+      }
+
+      return success;
+    }
+  }
+
+  return false;
+}
+
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
    If WRITABLE is true, the user process may modify the page;
