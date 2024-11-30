@@ -11,6 +11,7 @@
 #include "threads/vaddr.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
+#include "vm/page.h"
 
 /* Array of function pointers to handle syscalls. */
 syscall_func_t syscall_table[NUM_SYSCALLS];
@@ -41,6 +42,7 @@ static bool validate_user_pointer(const void *ptr);
 static uint32_t load_number_from_vaddr (void *vaddr);
 static char *load_address_from_vaddr (void *vaddr);
 static bool is_valid_user_address_range(const void *start, unsigned size);
+static bool check_any_mapped(void *start, void *stop);
 
 void
 syscall_init (void) 
@@ -443,7 +445,7 @@ sys_mmap (struct intr_frame *f)
   void *addr = load_address_from_vaddr(get_arg_2(f->esp));
 
   /* Check if the file descriptor is valid. */
-  if (fd == STDOUT_FILENO || fd == STDIN_FILENO) {
+  if (fd < BASE_FD) {
     f->eax = RETURN_ERR;
     return;
   }
@@ -461,16 +463,47 @@ sys_mmap (struct intr_frame *f)
     return;
   }
 
-  struct file *file = file_reopen(open_file->file);
-
   /* Get the file length. */
   int length = file_length(open_file->file);
 
-  /* Check if the length is 0. */
-  if (length == 0) {
+  void *stop = pg_round_up(addr + length);
+  if (length == 0 || check_any_mapped(addr, stop)) {
+      f->eax = RETURN_ERR;
+      return;
+  }
+
+  void *kpage = pagedir_get_page(thread_current()->pagedir, addr);
+  if (kpage != NULL) {
     f->eax = RETURN_ERR;
     return;
   }
+
+  /* Check if overlapping with existing mapped pages. */
+  struct thread *cur = thread_current();
+
+  uint32_t zero_bytes = PGSIZE - (length % PGSIZE);
+
+  lock_acquire(&filesys_lock);
+  struct file *file = file_reopen(open_file->file);
+  lock_release(&filesys_lock);
+
+  /* Insert into supplemental page table. */
+  struct page *p = malloc(sizeof(struct page));
+  if (p == NULL) {
+    f->eax = RETURN_ERR;
+    return;
+  }
+  p->vaddr = addr;
+  p->file = file;
+  p->read_bytes = length;
+  p->writable = true;
+  p->is_mmap = true;
+  if (!supp_page_table_insert(&cur->pg_table, p)) {
+    free(p);
+    f->eax = RETURN_ERR;
+    return;
+  }
+
 
   /* Create a new memory mapped file. */
   struct mapid_file *new_mapid_file = malloc(sizeof(struct mapid_file));
@@ -479,10 +512,9 @@ sys_mmap (struct intr_frame *f)
     return;
   }
 
-  /* Set the mapid and file. */
-  struct thread *cur = thread_current();
-  new_mapid_file->mapid = cur->next_mapid++;
+  /* Set the mapid and file and insert into mmap_table. */
   new_mapid_file->file = file;
+  new_mapid_file->mapid = cur->next_mapid++;
   hash_insert(&cur->mmap_table, &new_mapid_file->mapid_elem);
 
   /* Return the mapping ID. */
@@ -591,4 +623,40 @@ mmap_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED
   const struct mapid_file *mf_a = hash_entry(a, struct mapid_file, mapid_elem);
   const struct mapid_file *mf_b = hash_entry(b, struct mapid_file, mapid_elem);
   return mf_a->mapid < mf_b->mapid;
+}
+
+/* Checks whether there any pages in the range are mapped, reserved for
+   stack, or are kernel virtual addresses */
+// static bool check_any_mapped(void *start, void *stop) {
+//   ASSERT(start <= stop);
+//   struct thread *cur = thread_current();
+//   for (; start <= stop; start += PGSIZE) {
+//     if (supp_page_table_get(&cur->pg_table, start) != NULL ||
+//         start >= PHYS_BASE - 8388608) {
+//       return true;
+//     }
+//   }
+//   return false;
+// }
+
+static bool check_any_mapped(void *start, void *stop) {
+    ASSERT(start <= stop);
+    struct thread *cur = thread_current();
+
+    /* Align start and stop to page boundaries */
+    start = pg_round_down(start);
+    stop = pg_round_down(stop);
+
+    for (void *addr = start; addr <= stop; addr += PGSIZE) {
+        /* Check if the page is already mapped */
+        if (supp_page_table_get(&cur->pg_table, addr) != NULL) {
+            return true;
+        }
+
+        /* Check if the page overlaps with the stack */
+        if (addr >= PHYS_BASE - 8388608 && addr < PHYS_BASE) {
+            return true;
+        }
+    }
+    return false;
 }
