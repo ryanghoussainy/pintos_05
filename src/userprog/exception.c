@@ -181,9 +181,11 @@ page_fault (struct intr_frame *f)
       }
       lock_release(&filesys_lock);
       memset(frame + found_page->read_bytes, 0, PGSIZE - found_page->read_bytes);
+  } else if (found_page->swap_slot != (size_t) -1) {
+      swap_in(found_page->swap_slot, frame);
   } else {
       memset(frame, 0, PGSIZE);
-   }
+  }
 
   if (!install_page(fault_page, frame, found_page->writable)) {
       frame_free(frame);

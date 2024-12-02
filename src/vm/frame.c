@@ -1,5 +1,6 @@
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "devices/swap.h"
 
 static unsigned
 frame_hash(const struct hash_elem *elem, void *aux UNUSED) {
@@ -20,14 +21,80 @@ frame_table_init(void) {
     lock_init(&frame_lock);
 }
 
+static struct frame *clock_hand = NULL;
+
+static struct frame *
+frame_choose_victim(void) {
+    struct hash_iterator i;
+    struct frame *victim = NULL;
+
+    lock_acquire(&frame_lock);
+
+    if (clock_hand == NULL) {
+        hash_first(&i, &frame_table);
+        clock_hand = hash_entry(hash_cur(&i), struct frame, elem);
+    }
+    
+    while (victim == NULL) {
+        if (!clock_hand->pinned) {
+            if (pagedir_is_accessed(clock_hand->owner->pagedir, clock_hand->page)) {
+                pagedir_set_accessed(clock_hand->owner->pagedir, clock_hand->page, false);
+            } else {
+                victim = clock_hand;
+            }
+        }
+
+        hash_next(&i);
+        if (hash_cur(&i) == NULL) {
+            hash_first(&i, &frame_table);
+        }
+        clock_hand = hash_entry(hash_cur(&i), struct frame, elem);
+    }
+    
+    lock_release(&frame_lock);
+    ASSERT(victim != NULL); // Ensure there is a valid frame to evict
+    return victim;
+}
+
+static void
+frame_evict(void) {
+    struct frame *victim = frame_choose_victim();
+    ASSERT(victim != NULL);
+
+    struct thread *owner = victim->owner;
+    struct page *page = pagedir_get_page(owner->pagedir, victim->page);
+
+    if (page != NULL) {
+        // Swap out the page
+        size_t swap_slot = swap_out(victim->addr);
+        if (swap_slot == -1) {
+            PANIC("Swap failed during eviction");
+        }
+
+        // Update supplemental page table
+        page->vaddr = NULL; // Invalidate virtual address mapping
+        page->swap_slot = swap_slot; // Save swap slot index
+    }
+
+    // Free physical frame
+    hash_delete(&frame_table, &victim->elem);
+    palloc_free_page(victim->addr);
+    free(victim);
+}
+
+
 void *
 frame_alloc(enum palloc_flags pal, uint8_t *page) {
     struct thread *cur = thread_current();
 
     void *frame = palloc_get_page(pal);
     if (frame == NULL) {
-        // No free frames, implement eviction (Task 3 will cover eviction logic).
-        PANIC("Out of memory: frame table allocator failed");
+        /* Evict a frame */
+        frame_evict();
+        frame = palloc_get_page(pal);
+        if (frame == NULL) {
+            PANIC("Out of memory: frame allocation failed after eviction");
+        }
     }
 
     // Allocate frame table entry.
