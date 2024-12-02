@@ -50,6 +50,7 @@ struct mapid_file {
 };
 
 void syscall_init (void);
+void munmap(int mapid);
 void exit(int status);
 unsigned mmap_hash(const struct hash_elem *e, void *aux);
 bool mmap_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);  

@@ -535,6 +535,15 @@ sys_mmap (struct intr_frame *f)
   f->eax = new_mapid_file->mapid;
 }
 
+void
+munmap(int mapid)
+{
+  /* Just call sys_munmap with the given mapid. */
+  struct intr_frame f;
+  f.esp = (uint8_t *) &mapid - 4;
+  sys_munmap(&f);
+}
+
 /* Unmaps the memory mapped file from the process's virtual address space. */
 static void
 sys_munmap (struct intr_frame *f) 
@@ -562,7 +571,6 @@ sys_munmap (struct intr_frame *f)
               lock_release(&filesys_lock);
           }
           pagedir_clear_page(cur->pagedir, p->vaddr);
-          hash_delete(&cur->pg_table, &p->elem);
       }
   }
 
@@ -573,9 +581,6 @@ sys_munmap (struct intr_frame *f)
   lock_acquire(&filesys_lock);
   file_close(mmap_file->file);
   lock_release(&filesys_lock);
-
-  /* Free the memory mapped file. */
-  free(mmap_file);
 }
 
 /* Get the memory mapped file from the mapping ID. */
@@ -658,20 +663,6 @@ mmap_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED
   const struct mapid_file *mf_b = hash_entry(b, struct mapid_file, mapid_elem);
   return mf_a->mapid < mf_b->mapid;
 }
-
-/* Checks whether there any pages in the range are mapped, reserved for
-   stack, or are kernel virtual addresses */
-// static bool check_any_mapped(void *start, void *stop) {
-//   ASSERT(start <= stop);
-//   struct thread *cur = thread_current();
-//   for (; start <= stop; start += PGSIZE) {
-//     if (supp_page_table_get(&cur->pg_table, start) != NULL ||
-//         start >= PHYS_BASE - 8388608) {
-//       return true;
-//     }
-//   }
-//   return false;
-// }
 
 static bool check_any_mapped(void *start, void *stop) {
     ASSERT(start <= stop);
