@@ -14,6 +14,7 @@ struct page {
     bool writable;          // Flag to indicate if the page is writable.
     struct hash_elem elem;  // List element for maintaining the supplemental page table as a linked list.
     bool is_mmap;           // Flag to indicate if the page is a memory mapped page.
+    size_t swap_slot;       // Swap slot index for the page.
 };
 
 unsigned page_hash(const struct hash_elem *elem, void *aux UNUSED);

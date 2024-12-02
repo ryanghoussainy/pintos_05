@@ -22,6 +22,7 @@
 #include "userprog/syscall.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "devices/swap.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
@@ -326,6 +327,19 @@ process_exit (void)
       struct mapid_file *m = hash_entry(hash_cur(&i), struct mapid_file, mapid_elem);
       munmap(m->mapid);
     }
+
+  /* Free swap slots used by the process. */
+  // struct hash_iterator j;
+  // hash_first(&j, &cur->pg_table);
+  // while (hash_next(&j))
+  //   {
+  //     struct page *p = hash_entry(hash_cur(&j), struct page, elem);
+  //     if (p->swap_slot != (size_t) -1)
+  //       {
+  //         swap_drop(p->swap_slot);
+  //         p->swap_slot = (size_t) -1;
+  //       }
+  //   }
 
   /* Free hash table and containing data */
   hash_destroy(&cur->file_descriptors, fd_destroy);

@@ -12,6 +12,7 @@ struct frame {
     uint8_t *page;       // Pointer to the page occupying this frame.
     struct thread *owner;    // Thread owning the page.
     bool pinned;             // Flag to indicate if the frame is pinned.
+    bool reference_bit;      // Reference bit for clock algorithm.
     struct hash_elem elem;   // List element for maintaining frame table as a linked list.
 };
 

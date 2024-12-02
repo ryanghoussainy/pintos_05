@@ -12,6 +12,7 @@
 #include "filesys/file.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "devices/swap.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -181,16 +182,20 @@ page_fault (struct intr_frame *f)
       }
       lock_release(&filesys_lock);
       memset(frame + found_page->read_bytes, 0, PGSIZE - found_page->read_bytes);
+  } else if (found_page->swap_slot != (size_t) -1) {
+      swap_in(frame, found_page->swap_slot);
+      found_page->swap_slot = (size_t) -1;
   } else {
       memset(frame, 0, PGSIZE);
-   }
+  }
 
+   /* Install the page */
   if (!install_page(fault_page, frame, found_page->writable)) {
       frame_free(frame);
       goto page_fault;
   }
 
-   return;
+  return;
 
 page_fault:
   /* Count page faults. */

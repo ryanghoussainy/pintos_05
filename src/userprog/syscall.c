@@ -513,6 +513,7 @@ sys_mmap (struct intr_frame *f)
       p->read_bytes = page_read_bytes;
       p->writable = true;
       p->is_mmap = true;
+      p->swap_slot = -1;
 
       if (!supp_page_table_insert(&cur->pg_table, p)) {
           free(p);
