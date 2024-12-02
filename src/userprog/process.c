@@ -28,6 +28,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, char **a
 static struct link *valid_child_tid(tid_t child_tid);
 static void fd_destroy(struct hash_elem *e, void *aux UNUSED);
 static void page_destroy(struct hash_elem *e, void *aux UNUSED);
+static void mapping_destroy(struct hash_elem *e, void *aux UNUSED);
 static void trim_command(const char *str, const char **start, const char **end);
 static int num_args(const char *command);
 
@@ -294,11 +295,20 @@ fd_destroy(struct hash_elem *e, void *aux UNUSED)
   free(file);
 }
 
+/* Destructor function for the page table hash table. */
 static void
 page_destroy(struct hash_elem *e, void *aux UNUSED)
 {
   struct page *p = hash_entry(e, struct page, elem);
   free(p);
+}
+
+/* Destructor function for the mapping hash table. */
+static void
+mapping_destroy(struct hash_elem *e, void *aux UNUSED)
+{
+  struct mapid_file *m = hash_entry(e, struct mapid_file, mapid_elem);
+  free(m);
 }
 
 /* Free the current process's resources. */
@@ -308,9 +318,19 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  /* Unmap all memory mapped files */
+  struct hash_iterator i;
+  hash_first(&i, &cur->mmap_table);
+  while (hash_next(&i))
+    {
+      struct mapid_file *m = hash_entry(hash_cur(&i), struct mapid_file, mapid_elem);
+      munmap(m->mapid);
+    }
+
   /* Free hash table and containing data */
   hash_destroy(&cur->file_descriptors, fd_destroy);
   hash_destroy(&cur->pg_table, page_destroy);
+  hash_destroy(&cur->mmap_table, mapping_destroy);
 
   /* Allow write back to executable once exited */
 	if (cur->exec_file != NULL)
@@ -660,7 +680,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
-  // file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.

@@ -262,6 +262,7 @@ thread_create (const char *name, int priority,
 
 #ifdef VM
   hash_init(&t->pg_table, page_hash, page_less, NULL);
+  hash_init(&t->mmap_table, mmap_hash, mmap_less, NULL);
 #endif
 
   if (thread_mlfqs)
@@ -705,6 +706,7 @@ init_thread (struct thread *t, const char *name, int priority)
 #ifdef USERPROG
   list_init(&t->cLinks);
   t->next_fd = BASE_FD;
+  t->next_mapid = 0;
 #endif
 
   t->magic = THREAD_MAGIC;

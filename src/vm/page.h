@@ -3,6 +3,7 @@
 
 #include "hash.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 
 /* Page structure */
 struct page {
@@ -12,9 +13,12 @@ struct page {
     uint32_t read_bytes;    // Number of bytes to read from the file.
     bool writable;          // Flag to indicate if the page is writable.
     struct hash_elem elem;  // List element for maintaining the supplemental page table as a linked list.
+    bool is_mmap;           // Flag to indicate if the page is a memory mapped page.
 };
 
 unsigned page_hash(const struct hash_elem *elem, void *aux UNUSED);
 bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+struct page *supp_page_table_get(struct hash *hash, void *vaddr);
+bool supp_page_table_insert(struct hash *hash, struct page *p);
 
 #endif /* vm/page.h */
