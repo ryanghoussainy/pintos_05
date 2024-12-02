@@ -12,6 +12,7 @@
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 #include "vm/page.h"
+#include "vm/frame.h"
 
 /* Array of function pointers to handle syscalls. */
 syscall_func_t syscall_table[NUM_SYSCALLS];
@@ -478,32 +479,45 @@ sys_mmap (struct intr_frame *f)
     return;
   }
 
-  /* Check if overlapping with existing mapped pages. */
-  struct thread *cur = thread_current();
-
-  uint32_t zero_bytes = PGSIZE - (length % PGSIZE);
-
   lock_acquire(&filesys_lock);
   struct file *file = file_reopen(open_file->file);
   lock_release(&filesys_lock);
-
-  /* Insert into supplemental page table. */
-  struct page *p = malloc(sizeof(struct page));
-  if (p == NULL) {
-    f->eax = RETURN_ERR;
-    return;
-  }
-  p->vaddr = addr;
-  p->file = file;
-  p->read_bytes = length;
-  p->writable = true;
-  p->is_mmap = true;
-  if (!supp_page_table_insert(&cur->pg_table, p)) {
-    free(p);
+  if (file == NULL) {
     f->eax = RETURN_ERR;
     return;
   }
 
+  struct thread *cur = thread_current();
+  void *vaddr = addr;
+  size_t remaining_bytes = length;
+  size_t offset = 0;
+  while (remaining_bytes > 0) {
+      size_t page_read_bytes = remaining_bytes < PGSIZE ? remaining_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      struct page *p = malloc(sizeof(struct page));
+      if (p == NULL) {
+          f->eax = RETURN_ERR;
+          return;
+      }
+
+      p->vaddr = vaddr;
+      p->file = file;
+      p->offset = offset;
+      p->read_bytes = page_read_bytes;
+      p->writable = true;
+      p->is_mmap = true;
+
+      if (!supp_page_table_insert(&cur->pg_table, p)) {
+          free(p);
+          f->eax = RETURN_ERR;
+          return;
+      }
+
+      vaddr += PGSIZE;
+      offset += page_read_bytes;
+      remaining_bytes -= page_read_bytes;
+  }
 
   /* Create a new memory mapped file. */
   struct mapid_file *new_mapid_file = malloc(sizeof(struct mapid_file));
@@ -534,11 +548,31 @@ sys_munmap (struct intr_frame *f)
     return;
   }
 
+  struct thread *cur = thread_current();
+  struct file *file = mmap_file->file;
+
+  struct hash_iterator i;
+  hash_first(&i, &cur->pg_table);
+  while (hash_next(&i)) {
+      struct page *p = hash_entry(hash_cur(&i), struct page, elem);
+      if (p->file == file && p->is_mmap) {
+          if (pagedir_is_dirty(cur->pagedir, p->vaddr)) {
+              lock_acquire(&filesys_lock);
+              file_write_at(file, p->vaddr, p->read_bytes, p->offset);
+              lock_release(&filesys_lock);
+          }
+          pagedir_clear_page(cur->pagedir, p->vaddr);
+          hash_delete(&cur->pg_table, &p->elem);
+      }
+  }
+
   /* Remove the memory mapped file from the hash table. */
   hash_delete(&thread_current()->mmap_table, &mmap_file->mapid_elem);
 
   /* Close the file. */
+  lock_acquire(&filesys_lock);
   file_close(mmap_file->file);
+  lock_release(&filesys_lock);
 
   /* Free the memory mapped file. */
   free(mmap_file);

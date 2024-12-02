@@ -168,8 +168,6 @@ page_fault (struct intr_frame *f)
   /* Load the page into the frame */
   if (found_page->file != NULL) {
       lock_acquire(&filesys_lock);
-      // file_seek(found_page->file, found_page->offset);
-      file_read_at(found_page->file, frame, found_page->read_bytes, found_page->offset);
       if (file_read_at(found_page->file, frame, found_page->read_bytes, found_page->offset) != (int) found_page->read_bytes) {
          frame_free(frame);
          lock_release(&filesys_lock);
