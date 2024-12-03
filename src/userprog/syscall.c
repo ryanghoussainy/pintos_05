@@ -479,12 +479,6 @@ sys_mmap (struct intr_frame *f)
       return;
   }
 
-  void *kpage = pagedir_get_page(thread_current()->pagedir, addr);
-  if (kpage != NULL) {
-    f->eax = RETURN_ERR;
-    return;
-  }
-
   lock_acquire(&filesys_lock);
   struct file *file = file_reopen(open_file->file);
   lock_release(&filesys_lock);
@@ -500,43 +494,17 @@ sys_mmap (struct intr_frame *f)
   while (remaining_bytes > 0) {
       size_t page_read_bytes = remaining_bytes < PGSIZE ? remaining_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      struct page_data *data = malloc(sizeof(struct page_data));
-      if (data == NULL) {
-          f->eax = RETURN_ERR;
-          return;
-      }
-
-      data->frame = frame_alloc(PAL_USER, vaddr);
-      if (data->frame == NULL) {
-          free(data);
-          f->eax = RETURN_ERR;
-          return;
-      }
+      
+      struct page *page = page_alloc(vaddr + offset, true);
+      struct page_data *data = page->data;
+      page->vaddr = addr + offset;
+      data->is_mmap = true;
       data->file = file;
       data->offset = offset;
       data->read_bytes = page_read_bytes;
-      data->ref_count = 1;
-      data->writable = true;
-      data->swap_slot = (size_t) -1;
 
-      struct page *p = malloc(sizeof(struct page));
-      if (p == NULL) {
-          f->eax = RETURN_ERR;
-          return;
-      }
-
-      p->vaddr = vaddr;
-      p->data = data;
-
-      if (!supp_page_table_insert(&cur->pg_table, p)) {
-          free(p);
-          f->eax = RETURN_ERR;
-          return;
-      }
-
-      vaddr += PGSIZE;
-      offset += page_read_bytes;
+      // vaddr += PGSIZE;
+      offset += PGSIZE;
       remaining_bytes -= page_read_bytes;
   }
 

@@ -710,15 +710,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       struct page *page = supp_page_table_get(&thread_current()->pg_table, upage);
       struct page_data *data;
 
-      // struct page *p = page_alloc(upage, writable);
-      // p->data->frame = frame_alloc(PAL_USER, upage);
-      // p->data->file = file;
-      // p->data->offset = ofs;
-      // p->data->read_bytes = page_read_bytes;
-      // p->data->writable = writable;
-
       if (page) {
-        
+        data = page->data;
+        if (data->read_bytes < page_read_bytes) {
+          data->read_bytes = page_read_bytes;
+          data->writable |= writable;
+        }
       } else {
         struct page *other = NULL;
         if (t) {
@@ -727,19 +724,17 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
 
         if (other && !other->data->writable) {
-          /* Share page with other process. */
-          if (!page_alloc(upage, false)) {
+          page = page_alloc(upage, writable);
+          if (!page) {
             return false;
           }
-
-          page = page_alloc(upage, writable);
           page->data = other->data;
-          
         } else {
           if (!page_alloc(upage, writable)) {
             return false;
           }
 
+          page = page_alloc(upage, writable);
           page = supp_page_table_get(&thread_current()->pg_table, upage);
           data = page->data;
           data->frame = frame_alloc(PAL_USER, upage);
