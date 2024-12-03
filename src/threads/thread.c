@@ -17,9 +17,8 @@
 #include "lib/kernel/hash.h"
 #include "threads/malloc.h"
 #endif
-#ifdef VM
 #include "vm/page.h"
-#endif
+#include "filesys/file.h"
 
 
 /* Random value for struct thread's `magic' member.
@@ -824,6 +823,25 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+/* Returns the thread with the given executable file. */
+struct thread *
+thread_get_by_exec_file(struct file *file) {
+  enum intr_level old_level = intr_disable();
+
+  struct list_elem *e;
+  for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+    struct thread *t = list_entry(e, struct thread, allelem);
+
+    if (t->exec_file && file_compare(t->exec_file, file)) {
+      intr_set_level(old_level);
+      return t;
+    }
+  }
+
+  intr_set_level(old_level);
+  return NULL;
 }
 
 /* Offset of `stack' member within `struct thread'.

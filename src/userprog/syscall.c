@@ -501,6 +501,25 @@ sys_mmap (struct intr_frame *f)
       size_t page_read_bytes = remaining_bytes < PGSIZE ? remaining_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+      struct page_data *data = malloc(sizeof(struct page_data));
+      if (data == NULL) {
+          f->eax = RETURN_ERR;
+          return;
+      }
+
+      data->frame = frame_alloc(PAL_USER, vaddr);
+      if (data->frame == NULL) {
+          free(data);
+          f->eax = RETURN_ERR;
+          return;
+      }
+      data->file = file;
+      data->offset = offset;
+      data->read_bytes = page_read_bytes;
+      data->ref_count = 1;
+      data->writable = true;
+      data->swap_slot = (size_t) -1;
+
       struct page *p = malloc(sizeof(struct page));
       if (p == NULL) {
           f->eax = RETURN_ERR;
@@ -508,12 +527,7 @@ sys_mmap (struct intr_frame *f)
       }
 
       p->vaddr = vaddr;
-      p->file = file;
-      p->offset = offset;
-      p->read_bytes = page_read_bytes;
-      p->writable = true;
-      p->is_mmap = true;
-      p->swap_slot = -1;
+      p->data = data;
 
       if (!supp_page_table_insert(&cur->pg_table, p)) {
           free(p);
@@ -571,10 +585,12 @@ sys_munmap (struct intr_frame *f)
   hash_first(&i, &cur->pg_table);
   while (hash_next(&i)) {
       struct page *p = hash_entry(hash_cur(&i), struct page, elem);
-      if (p->file == file && p->is_mmap) {
+      struct page_data *data = p->data;
+
+      if (data->file == file && data->is_mmap) {
           if (pagedir_is_dirty(cur->pagedir, p->vaddr)) {
               lock_acquire(&filesys_lock);
-              file_write_at(file, p->vaddr, p->read_bytes, p->offset);
+              file_write_at(file, p->vaddr, data->read_bytes, data->offset);
               lock_release(&filesys_lock);
           }
           pagedir_clear_page(cur->pagedir, p->vaddr);

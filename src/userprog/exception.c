@@ -154,44 +154,33 @@ page_fault (struct intr_frame *f)
    return;
   }
 
-  void *fault_page = pg_round_down(fault_addr);
+  void *faddr = pg_round_down(fault_addr);
 
   /* Get faulting page in supplemental page table */
   struct thread *cur = thread_current();
-  struct page p;
-  p.vaddr = fault_page;
-  struct hash_elem *e = hash_find (&cur->pg_table, &p.elem);
-  if (e == NULL) {
-    goto page_fault;
-  }
-  struct page *found_page = hash_entry (e, struct page, elem);
 
-  /* Obtain a frame to store the page */
-  void *frame = frame_alloc(PAL_USER, found_page->vaddr);
-  if (frame == NULL) {
-    PANIC("Out of memory: Frame allocation failed.");
-  }
+  struct page *found_page = supp_page_table_get(&cur->pg_table, fault_addr);
 
-  /* Load the page into the frame */
-  if (found_page->file != NULL) {
-      lock_acquire(&filesys_lock);
-      if (file_read_at(found_page->file, frame, found_page->read_bytes, found_page->offset) != (int) found_page->read_bytes) {
+  if (found_page) {
+      void *frame = load_page(found_page);
+      if (frame == NULL) {
+          goto page_fault;
+      }
+
+      /* Install the page */
+      if (!install_page(faddr, frame, found_page->data->writable)) {
          frame_free(frame);
-         lock_release(&filesys_lock);
          goto page_fault;
       }
-      lock_release(&filesys_lock);
-      memset(frame + found_page->read_bytes, 0, PGSIZE - found_page->read_bytes);
-  } else if (found_page->swap_slot != (size_t) -1) {
-      swap_in(frame, found_page->swap_slot);
-      found_page->swap_slot = (size_t) -1;
   } else {
-      memset(frame, 0, PGSIZE);
-  }
+      struct page *new_page = page_alloc(faddr, true);
+      if (new_page == NULL) {
+          goto page_fault;
+      }
 
-   /* Install the page */
-  if (!install_page(fault_page, frame, found_page->writable)) {
-      frame_free(frame);
+      if (!load_page(new_page)) {
+          goto page_fault;
+      }
       goto page_fault;
   }
 

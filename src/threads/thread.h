@@ -189,6 +189,8 @@ void thread_calculate_load_avg(void);
 
 void sort_ready_list(void);
 
+struct thread *thread_get_by_exec_file(struct file *file);
+
 bool thread_more(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 
 #endif /* threads/thread.h */

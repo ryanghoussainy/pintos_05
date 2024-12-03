@@ -23,6 +23,7 @@
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "devices/swap.h"
+#include "threads/thread.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
@@ -694,6 +695,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
+  file_seek (file, ofs);
+
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -701,28 +704,58 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-      
-      /* Check if virtual page already allocated */
-      struct thread *t = thread_current ();
-      
-      /* Add page to supplemental page table */
-      struct page *pg = malloc(sizeof(struct page));
-      if (pg == NULL) {
-        return false;
+
+      struct thread *t = thread_get_by_exec_file(file);
+
+      struct page *page = supp_page_table_get(&thread_current()->pg_table, upage);
+      struct page_data *data;
+
+      // struct page *p = page_alloc(upage, writable);
+      // p->data->frame = frame_alloc(PAL_USER, upage);
+      // p->data->file = file;
+      // p->data->offset = ofs;
+      // p->data->read_bytes = page_read_bytes;
+      // p->data->writable = writable;
+
+      if (page) {
+        
+      } else {
+        struct page *other = NULL;
+        if (t) {
+          struct hash *page_table = &t->pg_table;
+          other = supp_page_table_get(page_table, upage);
+        }
+
+        if (other && !other->data->writable) {
+          /* Share page with other process. */
+          if (!page_alloc(upage, false)) {
+            return false;
+          }
+
+          page = page_alloc(upage, writable);
+          page->data = other->data;
+          
+        } else {
+          if (!page_alloc(upage, writable)) {
+            return false;
+          }
+
+          page = supp_page_table_get(&thread_current()->pg_table, upage);
+          data = page->data;
+          data->frame = frame_alloc(PAL_USER, upage);
+          data->file = file;
+          data->offset = ofs;
+          data->read_bytes = page_read_bytes;
+          data->writable = writable;
+        }
       }
-      pg->vaddr = upage;
-      pg->file = file;
-      pg->offset = ofs;
-      pg->read_bytes = page_read_bytes;
-      pg->writable = writable;
-      hash_insert(&t->pg_table, &pg->elem);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
 
-      ofs += PGSIZE;
+      ofs += page_read_bytes;
     }
   return true;
 }

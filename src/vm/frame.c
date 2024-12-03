@@ -111,7 +111,7 @@ frame_evict(void) {
 
             /* Update supplemental page table. */
             page->vaddr = NULL; // Invalidate virtual address mapping
-            page->swap_slot = swap_slot; // Save swap slot index
+            page->data->swap_slot = swap_slot; // Save swap slot index
         }
 
         /* Invalidate the page from the owner's page directory. */
