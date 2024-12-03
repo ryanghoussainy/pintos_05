@@ -104,7 +104,7 @@ main (void)
   paging_init ();
 #ifdef USERPROG
   frame_table_init();
-  swap_init();
+  shared_page_table_init();
 #endif
 
   /* Segmentation. */

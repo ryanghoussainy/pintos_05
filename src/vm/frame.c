@@ -9,6 +9,8 @@ static void frame_evict(void);
 static struct frame *frame_choose_victim(void);
 static unsigned frame_hash(const struct hash_elem *elem, void *aux UNUSED);
 static bool frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+static unsigned shared_page_hash(const struct hash_elem *elem, void *aux UNUSED);
+static bool shared_page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
 
 /* Initialise frame table. */
 void
@@ -16,6 +18,13 @@ frame_table_init(void) {
     hash_init(&frame_table, frame_hash, frame_less, NULL);
     lock_init(&frame_lock);
     clock_hand = NULL;
+}
+
+/* Initialise shared page table. */
+void
+shared_page_table_init(void) {
+    hash_init(&shared_page_table, shared_page_hash, shared_page_less, NULL);
+    lock_init(&shared_page_lock);
 }
 
 /* Allocates a frame and adds it to the frame table. */
@@ -182,4 +191,19 @@ frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSE
     const struct frame *f_a = hash_entry(a, struct frame, elem);
     const struct frame *f_b = hash_entry(b, struct frame, elem);
     return f_a->addr < f_b->addr;
+}
+
+/* Hash function for shared page table. */
+static unsigned 
+shared_page_hash(const struct hash_elem *e, void *aux UNUSED) {
+    struct shared_page_entry *entry = hash_entry(e, struct shared_page_entry, elem);
+    return file_hash(entry->file);
+}
+
+/* Comparison function for shared page table. */
+static bool
+shared_page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
+    struct shared_page_entry *entry_a = hash_entry(a, struct shared_page_entry, elem);
+    struct shared_page_entry *entry_b = hash_entry(b, struct shared_page_entry, elem);
+    return file_compare(entry_a->file, entry_b->file);
 }

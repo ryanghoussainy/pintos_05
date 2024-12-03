@@ -156,7 +156,7 @@ page_fault (struct intr_frame *f)
 
   void *fault_page = pg_round_down(fault_addr);
 
-  /* Get faulting page in supplemental page table */
+  /* Check if the faulting page is in the supplemental page table */
   struct thread *cur = thread_current();
   struct page p;
   p.vaddr = fault_page;
@@ -166,30 +166,82 @@ page_fault (struct intr_frame *f)
   }
   struct page *found_page = hash_entry (e, struct page, elem);
 
-  /* Obtain a frame to store the page */
-  void *frame = frame_alloc(PAL_USER, found_page->vaddr);
-  if (frame == NULL) {
-    PANIC("Out of memory: Frame allocation failed.");
+  /* Check if the page is read-only. */
+  if (found_page->file != NULL && !found_page->writable) {
+      /* Acquire lock for shared page table to ensure synchronisation. */
+      lock_acquire(&shared_page_lock);
+
+      /* Look up the shared page in the global table */
+      struct shared_page_entry lookup;
+      lookup.file = found_page->file;
+      lookup.offset = found_page->offset;
+      struct hash_elem *shared_e = hash_find(&shared_page_table, &lookup.elem);
+      if (shared_e != NULL) {
+          /* Reuse the shared frame. */
+          struct shared_page_entry *shared_entry = hash_entry(shared_e, struct shared_page_entry, elem);
+          shared_entry->ref_count++;
+          lock_release(&shared_page_lock);
+
+          /* Map the shared frame to the faulting page. */
+          if (!install_page(fault_page, shared_entry->frame, found_page->writable)) {
+              lock_acquire(&shared_page_lock);
+              shared_entry->ref_count--;
+              lock_release(&shared_page_lock);
+              goto page_fault;
+          }
+          return;
+      }
+      lock_release(&shared_page_lock);
   }
 
-  /* Load the page into the frame */
-  if (found_page->file != NULL) {
+   /* Page not shared, allocate a new frame and load the page. */
+   void *frame = frame_alloc(PAL_USER, found_page->vaddr);
+   if (frame == NULL) {
+         PANIC("Out of memory: Frame allocation failed.");
+   }
+
+   /* Load data into the frame */
+   if (found_page->file != NULL) {
       lock_acquire(&filesys_lock);
       if (file_read_at(found_page->file, frame, found_page->read_bytes, found_page->offset) != (int) found_page->read_bytes) {
-         frame_free(frame);
-         lock_release(&filesys_lock);
-         goto page_fault;
+            frame_free(frame);
+            lock_release(&filesys_lock);
+            goto page_fault;
       }
       lock_release(&filesys_lock);
       memset(frame + found_page->read_bytes, 0, PGSIZE - found_page->read_bytes);
-  } else if (found_page->swap_slot != (size_t) -1) {
-      swap_in(frame, found_page->swap_slot);
-      found_page->swap_slot = (size_t) -1;
-  } else {
-      memset(frame, 0, PGSIZE);
-  }
 
-   /* Install the page */
+      /* Add the page to the shared table */
+      lock_acquire(&shared_page_lock);
+      struct shared_page_entry *new_entry = malloc(sizeof(struct shared_page_entry));
+      new_entry->file = found_page->file;
+      new_entry->offset = found_page->offset;
+      new_entry->frame = frame;
+      new_entry->ref_count = 1;
+      hash_insert(&shared_page_table, &new_entry->elem);
+      lock_release(&shared_page_lock);
+
+      /* Install the page */
+      if (!install_page(fault_page, frame, found_page->writable)) {
+            lock_acquire(&shared_page_lock);
+            new_entry->ref_count--;
+            if (new_entry->ref_count == 0) {
+               hash_delete(&shared_page_table, &new_entry->elem);
+               free(new_entry);
+            }
+            lock_release(&shared_page_lock);
+            frame_free(frame);
+            goto page_fault;
+      }
+      return;
+   } else if (found_page->swap_slot != (size_t) -1) {
+         swap_in(frame, found_page->swap_slot);
+         found_page->swap_slot = (size_t) -1;
+   } else {
+         memset(frame, 0, PGSIZE);
+   }
+
+  /* Install the page */
   if (!install_page(fault_page, frame, found_page->writable)) {
       frame_free(frame);
       goto page_fault;
@@ -224,4 +276,3 @@ page_fault:
       PANIC("Page fault in kernel mode");
    }
 }
-

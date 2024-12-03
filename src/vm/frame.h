@@ -6,6 +6,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
+#include "filesys/file.h"
 
 struct frame {
     void *addr;        // Address of the frame.
@@ -19,7 +20,22 @@ struct frame {
 struct hash frame_table;    // Frame table.
 struct lock frame_lock;     // Lock for synchronizing frame table access.
 
+struct shared_page_entry {
+    struct file *file;      // File associated with the page.
+    uint32_t offset;        // Offset of the page in the file.
+    void *frame;            // Frame currently holding the page.
+    int ref_count;          // Number of processes sharing this page.
+    struct hash_elem elem;  // Hash element for maintaining shared page table as a linked list.
+};
+
+/* Shared page table. */
+struct hash shared_page_table;
+
+/* Lock for synchronizing shared page table access. */
+struct lock shared_page_lock;  
+
 void frame_table_init(void);
+void shared_page_table_init(void);
 void *frame_alloc(enum palloc_flags pal, uint8_t *page);
 void frame_free(void *frame_addr);
 
