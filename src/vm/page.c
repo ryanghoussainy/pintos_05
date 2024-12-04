@@ -24,21 +24,21 @@ page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED
 struct page * 
 supp_page_table_get(struct hash *hash, void *vaddr)
 {
-    // Align the virtual address to the nearest page boundary
+    /* Align the virtual address to the nearest page boundary. */
     vaddr = pg_round_down(vaddr);
 
-    // Create a temporary struct page to use as a lookup key
+    /* Create a temporary struct page to use as a lookup key. */
     struct page entry;
     entry.vaddr = vaddr;
 
-    // Search for the corresponding page in the hash table
+    /* Search for the corresponding page in the hash table. */
     struct hash_elem *found = hash_find(hash, &entry.elem);
     if (found == NULL) {
-        // No matching entry found, return NULL
+        /* No matching entry found, return NULL. */
         return NULL;
     }
 
-    // Extract and return the full struct page from the hash element
+    /* Extract and return the full struct page from the hash element. */
     return hash_entry(found, struct page, elem);
 }
 
@@ -50,7 +50,7 @@ supp_page_table_insert(struct hash *hash, struct page *p)
   return found == NULL;
 }
 
-/* Load a page into a frame. */
+/* Load a page into a frame, returning the frame. */
 struct frame *
 load_page(struct page *page) {
     struct shared_data *data = page->data;
@@ -58,11 +58,11 @@ load_page(struct page *page) {
     /* Obtain a frame to store the page */
     struct frame *frame = frame_alloc(page);
     void *frame_addr = frame->addr;
-
     if (frame_addr == NULL) {
         PANIC("Out of memory: Frame allocation failed.");
     }
 
+    /* Check if the current thread holds the file system lock */
     bool cur_holds_filesys = lock_held_by_current_thread(&filesys_lock);
 
     /* Load the page into the frame */
@@ -87,7 +87,7 @@ load_page(struct page *page) {
         memset(frame_addr, 0, PGSIZE);
     }
 
-    /* Update data->frame to point to the frame struct */
+    /* Find the corresponding frame in the frame table. */
     lock_acquire(&frame_lock);
     struct frame f_temp;
     f_temp.addr = frame_addr;
@@ -103,16 +103,17 @@ load_page(struct page *page) {
     return frame;
 }
 
-/* Allocate a page. */
+/* Allocate a page, returning the page. */
 struct page *
 page_alloc(void *vaddr, bool writable) {
+    /* Allocate memory a new page struct. */
     struct page *p = malloc(sizeof(struct page));
     if (p == NULL) {
         return NULL;
     }
-
     struct thread *cur = thread_current();
 
+    /* Initialise the page struct. */
     p->vaddr = vaddr;
     p->owner = cur;
     p->data = malloc(sizeof(struct shared_data));
@@ -121,6 +122,7 @@ page_alloc(void *vaddr, bool writable) {
         return NULL;
     }
 
+    /* Initialise the metadata of page struct. */
     p->data->frame = NULL;
     p->data->file = NULL;
     p->data->writable = writable;
@@ -128,12 +130,11 @@ page_alloc(void *vaddr, bool writable) {
     p->data->swap_slot = (size_t) -1;
     list_init(&p->data->pages);
     lock_init(&p->data->lock);
-    
     lock_acquire(&p->data->lock);
     list_push_back(&p->data->pages, &p->data_elem);
     lock_release(&p->data->lock);
 
+    /* Insert the page into the supplemental page table. */
     hash_insert(&cur->pg_table, &p->elem);
-
     return p;
 }

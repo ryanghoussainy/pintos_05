@@ -473,12 +473,14 @@ sys_mmap (struct intr_frame *f)
   /* Get the file length. */
   int length = file_length(open_file->file);
 
+  /* Check for any overlap with existing pages. */
   void *stop = pg_round_up(addr + length);
   if (length == 0 || check_any_mapped(addr, stop)) {
       f->eax = RETURN_ERR;
       return;
   }
-
+  
+  /* Use file_reopen() to obtain a separate reference to the file for each of its mappings. */
   lock_acquire(&filesys_lock);
   struct file *file = file_reopen(open_file->file);
   lock_release(&filesys_lock);
@@ -487,6 +489,7 @@ sys_mmap (struct intr_frame *f)
     return;
   }
 
+  /* Divide the file and map into the process's virtual address space. */
   struct thread *cur = thread_current();
   void *vaddr = addr;
   size_t remaining_bytes = length;
@@ -502,8 +505,6 @@ sys_mmap (struct intr_frame *f)
       data->file = file;
       data->offset = offset;
       data->read_bytes = page_read_bytes;
-
-      // vaddr += PGSIZE;
       offset += PGSIZE;
       remaining_bytes -= page_read_bytes;
   }
@@ -546,15 +547,14 @@ sys_munmap (struct intr_frame *f)
     return;
   }
 
+  /* Write back any dirty pages to the file. */
   struct thread *cur = thread_current();
   struct file *file = mmap_file->file;
-
   struct hash_iterator i;
   hash_first(&i, &cur->pg_table);
   while (hash_next(&i)) {
       struct page *p = hash_entry(hash_cur(&i), struct page, elem);
       struct shared_data *data = p->data;
-
       if (data->file == file && data->is_mmap) {
           if (pagedir_is_dirty(cur->pagedir, p->vaddr)) {
               lock_acquire(&filesys_lock);

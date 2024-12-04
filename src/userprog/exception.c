@@ -156,44 +156,48 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+   /* Check if filesys lock is held by current thread. */
   if (lock_held_by_current_thread(&filesys_lock)) {
       goto page_fault;
   }
 
    /* If the fault address appears to be in stack range then grow,
-      otherwise continue */
+      otherwise continue. */
   if (frame_alloc_stack(f->esp, fault_addr)) {
    return;
   }
 
+  /* Round down the fault address to get the page address. */
   void *faddr = pg_round_down(fault_addr);
 
-  /* Get faulting page in supplemental page table */
+  /* Get faulting page in supplemental page table. */
   struct thread *cur = thread_current();
 
+  /* Check if the faulting page is in the supplemental page table. */
   struct page *found_page = supp_page_table_get(&cur->pg_table, fault_addr);
-
   if (found_page) {
+      /* Allocate a new frame for the page. */
       struct frame *frame = load_page(found_page);
       if (frame == NULL) {
           goto page_fault;
       }
 
-      /* Install the page */
+      /* Install the page. */
       if (!install_page(faddr, frame->addr, found_page->data->writable)) {
          frame_free(frame);
          goto page_fault;
       }
   } else {
+      /* Check if stack needs to grow. */
       if (!frame_alloc_stack(f->esp, faddr)) {
           goto page_fault;
       }
 
+      /* Try to allocate a new page and allocate a frame for it. */
       struct page *new_page = page_alloc(faddr, true);
       if (new_page == NULL) {
           goto page_fault;
       }
-
       struct frame *frame = load_page(new_page);
       if (frame == NULL) {
           goto page_fault;
@@ -221,4 +225,3 @@ page_fault:
       PANIC("Page fault in kernel mode");
    }
 }
-

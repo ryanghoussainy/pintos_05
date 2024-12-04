@@ -722,11 +722,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+      /* Get the thread that is executing the same executable file. */
       struct thread *t = thread_get_by_exec_file(file);
 
+      /* Get the page from the supplemental page table. */
       struct page *page = supp_page_table_get(&thread_current()->pg_table, upage);
       struct shared_data *data;
 
+      /* If page exists in page table, overwrite read_bytes and writable. */
       if (page) {
         data = page->data;
         if (data->read_bytes < page_read_bytes) {
@@ -735,11 +738,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
       } else {
         struct page *other = NULL;
+
+        /* If there is a thread with the same executable, find the page for sharing. */
         if (t) {
           struct hash *page_table = &t->pg_table;
           other = supp_page_table_get(page_table, upage);
         }
 
+        /* If there is a page to share, use its data. */
         if (other && !other->data->writable) {
           page = page_alloc(upage, writable);
           if (page == NULL) {
@@ -750,7 +756,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           list_push_back(&page->data->pages, &page->data_elem);
           lock_release(&frame_lock);
         } else {
-
+          /* Otherwise, allocate a new page. */
           page = page_alloc(upage, writable);
           if (page == NULL) {
             return false;
@@ -766,7 +772,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
-
       ofs += page_read_bytes;
     }
   return true;
@@ -781,9 +786,11 @@ setup_stack (void **esp, char **argv, int argc)
   bool success = false;
   void *uaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
 
+  /* Allocate a new page to the stack. */
   kpage = page_alloc(uaddr, true);
-  kpage->data->frame = frame_alloc(kpage);
 
+  /* Allocate a frame for the page since first page in stack is not lazy loaded. */
+  kpage->data->frame = frame_alloc(kpage);
   if (kpage != NULL && kpage->data->frame != NULL) 
     {
       success = install_page (uaddr, kpage->data->frame->addr, true);
@@ -847,23 +854,23 @@ bool
 frame_alloc_stack(void *esp, void* faddr) {
 
   if (esp == NULL) {
-    // May be called before stack has been set up, if so handle case
+    /* May be called before stack has been set up, if so handle case. */
     return false;
   }
 
   struct page *kpage;
 
-  // Calculates current pages left until max stack size is reached
+  /* Calculates current pages left until max stack size is reached. */
   int cur_pages_left = STACK_MAX_SIZE - ((uintptr_t)(PHYS_BASE - (uintptr_t)esp) / PGSIZE);
 
-  // New page if the fault address is within bounds of the stack and pages can still be created
+  /* New page if the fault address is within bounds of the stack and pages can still be created. */
   if (faddr <= esp && faddr > (PHYS_BASE - (STACK_MAX_SIZE * PGSIZE)) && cur_pages_left > 0) {
 
     bool success = false;
 
     void* new_stack_addr = pg_round_down(esp);
 
-    // Handle edge case when esp is at the page border
+    /* Handle edge case when esp is at the page border. */
     if (pg_ofs(esp) == 0) {
       new_stack_addr = pg_round_down(esp - PGSIZE);
     }
