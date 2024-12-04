@@ -302,6 +302,23 @@ static void
 page_destroy(struct hash_elem *e, void *aux UNUSED)
 {
   struct page *p = hash_entry(e, struct page, elem);
+  // if (p->data != NULL) {
+
+  //   if (p->data->frame != NULL) {
+  //     pagedir_clear_page(p->owner->pagedir, p->vaddr);
+  //   }
+    
+  //   lock_acquire(&p->data->lock);
+  //   list_remove(&p->data_elem);
+  //   if (list_empty(&p->data->pages)) {
+  //     if (p->data->frame != NULL) {
+  //       frame_free(p->data->frame->addr);
+  //     }
+  //     free(p->data);
+  //   } else {
+  //     lock_release(&p->data->lock);
+  //   }
+  // }
   free(p);
 }
 
@@ -330,17 +347,17 @@ process_exit (void)
     }
 
   /* Free swap slots used by the process. */
-  // struct hash_iterator j;
-  // hash_first(&j, &cur->pg_table);
-  // while (hash_next(&j))
-  //   {
-  //     struct page *p = hash_entry(hash_cur(&j), struct page, elem);
-  //     if (p->swap_slot != (size_t) -1)
-  //       {
-  //         swap_drop(p->swap_slot);
-  //         p->swap_slot = (size_t) -1;
-  //       }
-  //   }
+  struct hash_iterator j;
+  hash_first(&j, &cur->pg_table);
+  while (hash_next(&j))
+    {
+      struct page *p = hash_entry(hash_cur(&j), struct page, elem);
+      if (p->data->swap_slot != (size_t) -1)
+        {
+          swap_drop(p->data->swap_slot);
+          p->data->swap_slot = (size_t) -1;
+        }
+    }
 
   /* Free hash table and containing data */
   hash_destroy(&cur->file_descriptors, fd_destroy);
@@ -725,23 +742,23 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
         if (other && !other->data->writable) {
           page = page_alloc(upage, writable);
-          if (!page) {
+          if (page == NULL) {
             return false;
           }
           page->data = other->data;
+          lock_acquire(&frame_lock);
+          list_push_back(&page->data->pages, &page->data_elem);
+          lock_release(&frame_lock);
         } else {
-          if (!page_alloc(upage, writable)) {
-            return false;
-          }
 
           page = page_alloc(upage, writable);
-          page = supp_page_table_get(&thread_current()->pg_table, upage);
+          if (page == NULL) {
+            return false;
+          }
           data = page->data;
-          data->frame = frame_alloc(PAL_USER, upage);
           data->file = file;
           data->offset = ofs;
           data->read_bytes = page_read_bytes;
-          data->writable = writable;
         }
       }
 
@@ -760,13 +777,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp, char **argv, int argc) 
 {
-  uint8_t *kpage;
+  struct page *kpage;
   bool success = false;
+  void *uaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
 
-  kpage = frame_alloc(PAL_USER | PAL_ZERO, ((uint8_t *) PHYS_BASE) - PGSIZE);
-  if (kpage != NULL) 
+  kpage = page_alloc(uaddr, true);
+  kpage->data->frame = frame_alloc(kpage);
+
+  if (kpage != NULL && kpage->data->frame != NULL) 
     {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      success = install_page (uaddr, kpage->data->frame->addr, true);
       if (success)
         {
           /* Start at the bottom of the stack */
@@ -815,7 +835,7 @@ setup_stack (void **esp, char **argv, int argc)
           *((void **) *esp) = NULL;
         }
       else
-        frame_free(kpage);
+        frame_free(kpage->data->frame);
     }
   return success;
 }
@@ -831,7 +851,7 @@ frame_alloc_stack(void *esp, void* faddr) {
     return false;
   }
 
-  uint8_t *kpage;
+  struct page *kpage;
 
   // Calculates current pages left until max stack size is reached
   int cur_pages_left = STACK_MAX_SIZE - ((uintptr_t)(PHYS_BASE - (uintptr_t)esp) / PGSIZE);
@@ -848,14 +868,15 @@ frame_alloc_stack(void *esp, void* faddr) {
       new_stack_addr = pg_round_down(esp - PGSIZE);
     }
 
-    kpage = frame_alloc(PAL_USER | PAL_ZERO, new_stack_addr);
+    kpage = page_alloc(new_stack_addr, true);
+    kpage->data->frame = frame_alloc(kpage);
 
-    if (kpage != NULL) {
+    if (kpage != NULL && kpage->data->frame != NULL) {
 
-      success = install_page (new_stack_addr, kpage, true);
+      success = install_page (new_stack_addr, kpage->data->frame->addr, true);
 
       if (!success) {
-        frame_free(kpage);
+        frame_free(kpage->data->frame);
       }
 
       return success;

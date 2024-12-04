@@ -706,6 +706,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->cLinks);
   t->next_fd = BASE_FD;
   t->next_mapid = 0;
+  t->exec_file = NULL;
 #endif
 
   t->magic = THREAD_MAGIC;

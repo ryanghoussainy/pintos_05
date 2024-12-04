@@ -148,6 +148,18 @@ page_fault (struct intr_frame *f)
      be assured of reading CR2 before it changed). */
   intr_enable ();
 
+  /* Count page faults. */
+  page_fault_cnt++;
+
+  /* Determine cause. */
+  not_present = (f->error_code & PF_P) == 0;
+  write = (f->error_code & PF_W) != 0;
+  user = (f->error_code & PF_U) != 0;
+
+  if (lock_held_by_current_thread(&filesys_lock)) {
+      goto page_fault;
+  }
+
    /* If the fault address appears to be in stack range then grow,
       otherwise continue */
   if (frame_alloc_stack(f->esp, fault_addr)) {
@@ -162,39 +174,35 @@ page_fault (struct intr_frame *f)
   struct page *found_page = supp_page_table_get(&cur->pg_table, fault_addr);
 
   if (found_page) {
-      void *frame = load_page(found_page);
+      struct frame *frame = load_page(found_page);
       if (frame == NULL) {
           goto page_fault;
       }
 
       /* Install the page */
-      if (!install_page(faddr, frame, found_page->data->writable)) {
+      if (!install_page(faddr, frame->addr, found_page->data->writable)) {
          frame_free(frame);
          goto page_fault;
       }
   } else {
+      if (!frame_alloc_stack(f->esp, faddr)) {
+          goto page_fault;
+      }
+
       struct page *new_page = page_alloc(faddr, true);
       if (new_page == NULL) {
           goto page_fault;
       }
 
-      if (!load_page(new_page)) {
+      struct frame *frame = load_page(new_page);
+      if (frame == NULL) {
           goto page_fault;
       }
-      goto page_fault;
   }
 
   return;
 
 page_fault:
-  /* Count page faults. */
-  page_fault_cnt++;
-
-  /* Determine cause. */
-  not_present = (f->error_code & PF_P) == 0;
-  write = (f->error_code & PF_W) != 0;
-  user = (f->error_code & PF_U) != 0;
-
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

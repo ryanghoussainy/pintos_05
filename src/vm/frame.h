@@ -9,7 +9,7 @@
 
 struct frame {
     void *addr;        // Address of the frame.
-    uint8_t *page;       // Pointer to the page occupying this frame.
+    struct page *page;       // Page occupying this frame.
     struct thread *owner;    // Thread owning the page.
     bool pinned;             // Flag to indicate if the frame is pinned.
     bool reference_bit;      // Reference bit for clock algorithm.
@@ -20,7 +20,7 @@ struct hash frame_table;    // Frame table.
 struct lock frame_lock;     // Lock for synchronizing frame table access.
 
 void frame_table_init(void);
-void *frame_alloc(enum palloc_flags pal, uint8_t *page);
-void frame_free(void *frame_addr);
+struct frame *frame_alloc(struct page *page);
+void frame_free(struct frame *frame);
 
 #endif /* vm/frame.h */

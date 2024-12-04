@@ -51,32 +51,54 @@ supp_page_table_insert(struct hash *hash, struct page *p)
 }
 
 /* Load a page into memory. */
-void *
+struct frame *
 load_page(struct page *page) {
     struct page_data *data = page->data;
 
     /* Obtain a frame to store the page */
-    void *frame = frame_alloc(PAL_USER, page->vaddr);
-    if (frame == NULL) {
+    struct frame *frame = frame_alloc(page);
+    void *frame_addr = frame->addr;
+
+    if (frame_addr == NULL) {
         PANIC("Out of memory: Frame allocation failed.");
     }
 
+    bool cur_holds_filesys = lock_held_by_current_thread(&filesys_lock);
+
     /* Load the page into the frame */
     if (data->file != NULL) {
-        lock_acquire(&filesys_lock);
-        if (file_read_at(data->file, frame, data->read_bytes, data->offset) != (int) data->read_bytes) {
+        if (!cur_holds_filesys) 
+            lock_acquire(&filesys_lock);
+
+        if (file_read_at(data->file, frame_addr, data->read_bytes, data->offset) != (int) data->read_bytes) {
             frame_free(frame);
-            lock_release(&filesys_lock);
+            if (!cur_holds_filesys)
+                lock_release(&filesys_lock);
             return NULL;
         }
-        lock_release(&filesys_lock);
-        memset(frame + data->read_bytes, 0, PGSIZE - data->read_bytes);
+        if (!cur_holds_filesys)
+            lock_release(&filesys_lock);
+            
+        memset(frame_addr + data->read_bytes, 0, PGSIZE - data->read_bytes);
     } else if (data->swap_slot != (size_t) -1) {
-        swap_in(frame, data->swap_slot);
+        swap_in(frame_addr, data->swap_slot);
         data->swap_slot = (size_t) -1;
     } else {
-        memset(frame, 0, PGSIZE);
+        memset(frame_addr, 0, PGSIZE);
     }
+
+    /* Update data->frame to point to the frame struct */
+    lock_acquire(&frame_lock);
+    struct frame f_temp;
+    f_temp.addr = frame_addr;
+    struct hash_elem *e = hash_find(&frame_table, &f_temp.elem);
+    if (e == NULL) {
+        lock_release(&frame_lock);
+        PANIC("Frame not found in frame table after allocation");
+    }
+    struct frame *f = hash_entry(e, struct frame, elem);
+    data->frame = f;
+    lock_release(&frame_lock);
 
     return frame;
 }
@@ -89,7 +111,10 @@ page_alloc(void *vaddr, bool writable) {
         return NULL;
     }
 
+    struct thread *cur = thread_current();
+
     p->vaddr = vaddr;
+    p->owner = cur;
     p->data = malloc(sizeof(struct page_data));
     if (p->data == NULL) {
         free(p);
@@ -98,12 +123,17 @@ page_alloc(void *vaddr, bool writable) {
 
     p->data->frame = NULL;
     p->data->file = NULL;
-    p->data->ref_count = 1;
     p->data->writable = writable;
     p->data->is_mmap = false;
     p->data->swap_slot = (size_t) -1;
+    list_init(&p->data->pages);
+    lock_init(&p->data->lock);
+    
+    lock_acquire(&p->data->lock);
+    list_push_back(&p->data->pages, &p->data_elem);
+    lock_release(&p->data->lock);
 
-    hash_insert(&thread_current()->pg_table, &p->elem);
+    hash_insert(&cur->pg_table, &p->elem);
 
     return p;
 }
