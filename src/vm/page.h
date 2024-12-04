@@ -35,4 +35,7 @@ bool supp_page_table_insert(struct hash *hash, struct page *p);
 struct frame *load_page(struct page *p);
 struct page *page_alloc(void *vaddr, bool writable);
 
+void pin_user_pages(void *buffer, size_t size);
+void unpin_user_pages(void *buffer, size_t size);
+
 #endif /* vm/page.h */

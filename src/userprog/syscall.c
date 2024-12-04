@@ -343,6 +343,8 @@ sys_read (struct intr_frame *f)
     return;
   }
 
+  pin_user_pages(buffer, size);
+
   /* Check if the file descriptor is valid. */
   if (fd == STDOUT_FILENO) {
     /* Cannot read from stdout. */
@@ -370,6 +372,8 @@ sys_read (struct intr_frame *f)
     /* Read from the file into the buffer, returning the bytes written. */
     int read_characters = file_read(opened_file->file, buffer, size);
     lock_release(&filesys_lock);
+
+    unpin_user_pages(buffer, size);
     f->eax = read_characters;
   }
 }

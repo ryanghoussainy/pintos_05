@@ -6,6 +6,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h"
 
 struct frame {
     void *addr;              /* Address of the frame. */
@@ -22,5 +23,8 @@ struct lock frame_lock;     /* Lock for synchronizing frame table access. */
 void frame_table_init(void);
 struct frame *frame_alloc(struct page *page);
 void frame_free(struct frame *frame);
+
+void pin_frame(void *vaddr);
+void unpin_frame(void *vaddr);
 
 #endif /* vm/frame.h */

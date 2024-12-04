@@ -62,6 +62,11 @@ load_page(struct page *page) {
         PANIC("Out of memory: Frame allocation failed.");
     }
 
+    /* Pin the frame. */
+    // lock_acquire(&frame_lock);
+    // page->data->frame->pinned = true;
+    // lock_release(&frame_lock);
+
     /* Check if the current thread holds the file system lock */
     bool cur_holds_filesys = lock_held_by_current_thread(&filesys_lock);
 
@@ -86,6 +91,11 @@ load_page(struct page *page) {
     } else {
         memset(frame_addr, 0, PGSIZE);
     }
+
+    /* Pin the frame. */
+    // lock_acquire(&frame_lock);
+    // page->data->frame->pinned = true;
+    // lock_release(&frame_lock);
 
     /* Find the corresponding frame in the frame table. */
     lock_acquire(&frame_lock);
@@ -137,4 +147,30 @@ page_alloc(void *vaddr, bool writable) {
     /* Insert the page into the supplemental page table. */
     hash_insert(&cur->pg_table, &p->elem);
     return p;
+}
+
+void 
+pin_user_pages (void *buffer, size_t size) 
+{
+    void *upage = pg_round_down(buffer);
+    void *end = buffer + size;
+
+    while (upage < end)
+    {
+        pin_frame(upage);
+        upage += PGSIZE;
+    }
+}
+
+void
+unpin_user_pages (void *buffer, size_t size)
+{
+    void *upage = pg_round_down(buffer);
+    void *end = buffer + size;
+
+    while (upage < end)
+    {
+        unpin_frame(upage);
+        upage += PGSIZE;
+    }
 }
