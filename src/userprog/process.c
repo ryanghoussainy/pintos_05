@@ -725,7 +725,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       struct thread *t = thread_get_by_exec_file(file);
 
       struct page *page = supp_page_table_get(&thread_current()->pg_table, upage);
-      struct page_data *data;
+      struct shared_data *data;
 
       if (page) {
         data = page->data;

@@ -9,13 +9,13 @@
 struct page {
     void *vaddr;            // User virtual page address.
     struct thread *owner;   // Thread owning the page.
-    struct page_data *data; // Page data.
+    struct shared_data *data; // Page data.
     struct hash_elem elem;  // List element for maintaining the supplemental page table as a linked list.
     struct list_elem data_elem; // List element for maintaining the frame's list of pages.
 };
 
-/* Page data */
-struct page_data {
+/* Shared data */
+struct shared_data {
     struct frame *frame;    // Frame associated with the page.
     struct file *file;      // File associated with the page.
     uint32_t offset;        // Offset of the page in the file.

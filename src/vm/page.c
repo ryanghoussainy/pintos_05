@@ -50,10 +50,10 @@ supp_page_table_insert(struct hash *hash, struct page *p)
   return found == NULL;
 }
 
-/* Load a page into memory. */
+/* Load a page into a frame. */
 struct frame *
 load_page(struct page *page) {
-    struct page_data *data = page->data;
+    struct shared_data *data = page->data;
 
     /* Obtain a frame to store the page */
     struct frame *frame = frame_alloc(page);
@@ -115,7 +115,7 @@ page_alloc(void *vaddr, bool writable) {
 
     p->vaddr = vaddr;
     p->owner = cur;
-    p->data = malloc(sizeof(struct page_data));
+    p->data = malloc(sizeof(struct shared_data));
     if (p->data == NULL) {
         free(p);
         return NULL;

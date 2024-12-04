@@ -496,7 +496,7 @@ sys_mmap (struct intr_frame *f)
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
       
       struct page *page = page_alloc(vaddr + offset, true);
-      struct page_data *data = page->data;
+      struct shared_data *data = page->data;
       page->vaddr = addr + offset;
       data->is_mmap = true;
       data->file = file;
@@ -553,7 +553,7 @@ sys_munmap (struct intr_frame *f)
   hash_first(&i, &cur->pg_table);
   while (hash_next(&i)) {
       struct page *p = hash_entry(hash_cur(&i), struct page, elem);
-      struct page_data *data = p->data;
+      struct shared_data *data = p->data;
 
       if (data->file == file && data->is_mmap) {
           if (pagedir_is_dirty(cur->pagedir, p->vaddr)) {
