@@ -5,8 +5,9 @@
 /* Static pointer used for the Clock algorithm. */
 static struct frame *clock_hand;
 
-static void frame_evict(void);
+static void frame_evict(struct frame *victim);
 static struct frame *frame_choose_victim(void);
+static bool lock_frame(struct frame *frame);
 static unsigned frame_hash(const struct hash_elem *elem, void *aux UNUSED);
 static bool frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
 
@@ -24,37 +25,71 @@ frame_alloc(struct page *page) {
     /* Retrieve the current thread. */
     struct thread *cur = thread_current();
 
+    struct frame *f;
+
     /* Allocate a frame. */
-    void *frame = palloc_get_page(PAL_USER | PAL_ZERO);
-    if (frame == NULL) {
+    void *faddr = palloc_get_page(PAL_USER | PAL_ZERO);
+
+    /* Evict a frame from page table and reuse it. */
+    if (!faddr) {
+        lock_acquire(&frame_lock);
         /* Evict a frame if no memory is available. */
-        frame_evict();
-        frame = palloc_get_page(PAL_USER | PAL_ZERO);
+        struct frame *f = frame_choose_victim();
+        frame_evict(f);
+        // faddr = palloc_get_page(PAL_USER | PAL_ZERO);
 
         /* Panic if frame allocation fails after eviction. */
-        if (frame == NULL) {
+        if (f == NULL) {
             PANIC("Out of memory: frame allocation failed after eviction");
         }
+        hash_delete(&frame_table, &f->elem);
+        hash_insert(&frame_table, &f->elem);
+        lock_release(&frame_lock);
+        f->page->data = page->data;
+        return f;
     }
+    // } else {
+    // /* Allocate frame table entry. */
+    //     struct frame *f = malloc(sizeof(struct frame));
+    //     if (f == NULL) {
+    //         palloc_free_page(faddr);
+    //         PANIC("Out of memory: frame table entry allocation failed");
+    //     }
+    //     f->addr = faddr;
+    //     f->page = page;
+    //     f->owner = cur;
+    //     f->pinned = false;
+    //     lock_acquire(&frame_lock);
+    //     hash_insert(&frame_table, &f->elem);
+    //     lock_release(&frame_lock);
+    // }
 
-    /* Allocate frame table entry. */
-    struct frame *f = malloc(sizeof(struct frame));
-    if (f == NULL) {
-        palloc_free_page(frame);
-        PANIC("Out of memory: frame table entry allocation failed");
-    }
+    struct frame *frame = malloc(sizeof(struct frame));
+        if (frame == NULL) {
+            palloc_free_page(faddr);
+            PANIC("Out of memory: frame table entry allocation failed");
+        }
+        frame->addr = faddr;
+        frame->page = page;
+        frame->owner = cur;
+        frame->pinned = false;
+        lock_acquire(&frame_lock);
+        hash_insert(&frame_table, &frame->elem);
+        lock_release(&frame_lock);
 
     /* Initialise frame table entry. */
-    f->addr = frame;
-    f->page = page;
-    f->owner = cur;
-    f->pinned = false;
+    // f->addr = faddr;
+    // f->page = page;
+    // f->owner = cur;
+    // f->pinned = false;
+
+    frame->page->data = page->data;
 
     /* Insert frame table entry into hash table. */
-    lock_acquire(&frame_lock);
-    hash_insert(&frame_table, &f->elem);
-    lock_release(&frame_lock);
-    return f;
+    // lock_acquire(&frame_lock);
+    // hash_insert(&frame_table, &f->elem);
+    // lock_release(&frame_lock);
+    return frame;
 }
 
 /* Frees a frame from the frame table. */
@@ -78,12 +113,9 @@ frame_free(struct frame *frame) {
 
 /* Evicts a frame from the frame table. */
 static void
-frame_evict(void) {
-
-    lock_acquire(&frame_lock);
-
+frame_evict(struct frame *victim) {
     /* Choose a victim frame to evict. */
-    struct frame *victim = frame_choose_victim();
+    // struct frame *victim = frame_choose_victim();
     ASSERT(victim != NULL);
     struct thread *owner = victim->owner;
     ASSERT(owner != NULL);
@@ -95,6 +127,9 @@ frame_evict(void) {
     //     lock_release(&frame_lock);
     //     // Try again?
     // }
+
+    // struct shared_data *data = victim->page->data;
+    // lock_acquire(&data->lock);
 
     /* Get the page associated with the frame. */
     struct page *page = supp_page_table_get(&owner->pg_table, victim->page->vaddr);
@@ -113,6 +148,7 @@ frame_evict(void) {
         /* Swap out the page if it is dirty. */
         size_t swap_slot = swap_out(victim->addr);
         if (swap_slot == (size_t) -1) {
+            // lock_release(&data->lock);
             PANIC("Swap failed during eviction");
         }
 
@@ -125,8 +161,8 @@ frame_evict(void) {
     // pagedir_clear_page(owner->pagedir, victim->page);
 
     /* Remove frame from the frame table and free physical frame. */
-    hash_delete(&frame_table, &victim->elem);
-    lock_release(&frame_lock);
+    // hash_delete(&frame_table, &victim->elem);
+    // lock_release(&data->lock);
 
     // palloc_free_page(victim->addr);
     // free(victim);
@@ -146,13 +182,16 @@ frame_choose_victim(void) {
     
     /* Iterate through the frame table until a victim is found. */
     while (victim == NULL) {
-        if (!clock_hand->pinned) {
+        // if (!clock_hand->pinned) {
+        // lock_acquire(&frame_lock);
             if (pagedir_is_accessed(clock_hand->owner->pagedir, clock_hand->page->vaddr)) {
                 pagedir_set_accessed(clock_hand->owner->pagedir, clock_hand->page->vaddr, false);
+            //     // clock_hand->pinned = false;
             } else {
                 victim = clock_hand;
             }
-        }
+        // lock_release(&frame_lock);
+        // }
 
         /* Move the clock hand to the next frame. */
         hash_next(&i);
@@ -166,6 +205,58 @@ frame_choose_victim(void) {
     /* Ensure that a victim was found. */
     ASSERT(victim != NULL); 
     return victim;
+    
+
+    // PANIC ("Failed to lock frame during eviction");
+    // return victim;
+}
+
+static bool 
+lock_frame (struct frame *frame)
+{
+    if (frame->pinned && lock_held_by_current_thread(&frame_lock))
+    {
+        return false;
+    }
+    frame->pinned = true;
+    lock_acquire(&frame_lock);
+    return true;
+}
+
+/* Pins a frame to prevent it being evicted */
+bool
+pin_frame(void *vaddr) {
+    struct thread *cur = thread_current();
+    struct page *page = supp_page_table_get(&cur->pg_table, vaddr);
+    if (page) {
+        if (page->data == NULL || page->data->frame == NULL) {
+            // Load the page if it's not in memory
+            if (load_page(page) == NULL) {
+                return false;
+            }
+            if (!install_page(page->vaddr, page->data->frame->addr, page->data->writable)) {
+                return false;
+            }
+        }
+        lock_acquire(&frame_lock);
+        page->data->frame->pinned = true;
+        lock_release(&frame_lock);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/* Unpin a frame to allow eviction again */
+void
+unpin_frame(void *vaddr) {
+    struct thread *cur = thread_current();
+    struct page *page = supp_page_table_get(&cur->pg_table, vaddr);
+    if (page != NULL && page->data != NULL && page->data->frame != NULL) {
+        lock_acquire(&frame_lock);
+        page->data->frame->pinned = false;
+        lock_release(&frame_lock);
+    }
 }
 
 /* Frame table hash function. */

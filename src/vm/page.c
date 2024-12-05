@@ -62,6 +62,11 @@ load_page(struct page *page) {
         PANIC("Out of memory: Frame allocation failed.");
     }
 
+    /* Pin the frame. */
+    // lock_acquire(&frame_lock);
+    // page->data->frame->pinned = true;
+    // lock_release(&frame_lock);
+
     /* Check if the current thread holds the file system lock */
     bool cur_holds_filesys = lock_held_by_current_thread(&filesys_lock);
 
@@ -86,6 +91,11 @@ load_page(struct page *page) {
     } else {
         memset(frame_addr, 0, PGSIZE);
     }
+
+    /* Pin the frame. */
+    // lock_acquire(&frame_lock);
+    // page->data->frame->pinned = true;
+    // lock_release(&frame_lock);
 
     /* Find the corresponding frame in the frame table. */
     lock_acquire(&frame_lock);
@@ -139,42 +149,6 @@ page_alloc(void *vaddr, bool writable) {
     return p;
 }
 
-/* Pins a frame to prevent it being evicted */
-bool
-pin_frame(void *vaddr) {
-    struct thread *cur = thread_current();
-    struct page *page = supp_page_table_get(&cur->pg_table, vaddr);
-    if (page) {
-        if (page->data == NULL || page->data->frame == NULL) {
-            // Load the page if it's not in memory
-            if (load_page(page) == NULL) {
-                return false;
-            }
-            if (!install_page(page->vaddr, page->data->frame->addr, page->data->writable)) {
-                return false;
-            }
-        }
-        lock_acquire(&frame_lock);
-        page->data->frame->pinned = true;
-        lock_release(&frame_lock);
-        return true;
-    } else {
-        return false;
-    }
-}
-
-/* Unpin a frame to allow eviction again */
-void
-unpin_frame(void *vaddr) {
-    struct thread *cur = thread_current();
-    struct page *page = supp_page_table_get(&cur->pg_table, vaddr);
-    if (page != NULL && page->data != NULL && page->data->frame != NULL) {
-        lock_acquire(&frame_lock);
-        page->data->frame->pinned = false;
-        lock_release(&frame_lock);
-    }
-}
-
 /* Pins a collection of user pages (buffer) */
 bool
 pin_user_pages(void *buffer, size_t size) {
@@ -203,7 +177,8 @@ unpin_user_pages(void *buffer, size_t size) {
     }
 }
 
-bool check_user_pages_writable(void* buffer, size_t size) {
+bool
+check_user_pages_writable(void* buffer, size_t size) {
     void *upage = pg_round_down(buffer);
     void *end = buffer + size;
     struct thread *cur = thread_current();
