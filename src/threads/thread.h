@@ -113,7 +113,7 @@ struct thread
     struct file *exec_file;             /* Executable file of the thread */
 
     /* vm */
-    struct hash pg_table;               /* Supplemental page table */
+    struct hash spt;                    /* Supplemental page table */
     int next_mapid;                     /* Next available mapid */
     struct hash mmap_table;             /* Memory mapped files */
 #endif

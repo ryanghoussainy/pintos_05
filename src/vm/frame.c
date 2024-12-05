@@ -252,7 +252,7 @@ frame_choose_victim(void) {
 // bool
 // pin_frame(void *vaddr) {
 //     struct thread *cur = thread_current();
-//     struct page *page = supp_page_table_get(&cur->pg_table, vaddr);
+//     struct page *page = spt_get(&cur->spt, vaddr);
 //     if (page) {
 //         if (page->data == NULL || page->data->frame == NULL) {
 //             // Load the page if it's not in memory
@@ -276,7 +276,7 @@ frame_choose_victim(void) {
 // void
 // unpin_frame(void *vaddr) {
 //     struct thread *cur = thread_current();
-//     struct page *page = supp_page_table_get(&cur->pg_table, vaddr);
+//     struct page *page = spt_get(&cur->spt, vaddr);
 //     if (page != NULL && page->data != NULL && page->data->frame != NULL) {
 //         lock_acquire(&frame_lock);
 //         page->data->frame->pinned = false;

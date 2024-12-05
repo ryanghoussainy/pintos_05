@@ -260,7 +260,7 @@ thread_create (const char *name, int priority,
 #endif
 
 #ifdef VM
-  hash_init(&t->pg_table, page_hash, page_less, NULL);
+  hash_init(&t->spt, page_hash, page_less, NULL);
   hash_init(&t->mmap_table, mmap_hash, mmap_less, NULL);
 #endif
 

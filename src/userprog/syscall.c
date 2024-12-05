@@ -511,7 +511,7 @@ sys_mmap (struct intr_frame *f)
       size_t page_read_bytes = remaining_bytes < PGSIZE ? remaining_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
       
-      struct page *page = page_alloc(vaddr + offset, true);
+      struct page *page = page_create(vaddr + offset, true);
       struct shared_data *data = page->data;
       page->vaddr = addr + offset;
       data->is_mmap = true;
@@ -564,7 +564,7 @@ sys_munmap (struct intr_frame *f)
   struct thread *cur = thread_current();
   struct file *file = mmap_file->file;
   struct hash_iterator i;
-  hash_first(&i, &cur->pg_table);
+  hash_first(&i, &cur->spt);
   while (hash_next(&i)) {
       struct page *p = hash_entry(hash_cur(&i), struct page, elem);
       struct shared_data *data = p->data;
@@ -678,7 +678,7 @@ static bool check_any_mapped(void *start, void *stop) {
 
     for (void *addr = start; addr <= stop; addr += PGSIZE) {
         /* Check if the page is already mapped */
-        if (supp_page_table_get(&cur->pg_table, addr) != NULL) {
+        if (spt_get(&cur->spt, addr) != NULL) {
             return true;
         }
 
