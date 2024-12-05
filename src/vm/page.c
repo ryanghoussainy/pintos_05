@@ -150,32 +150,32 @@ page_alloc(void *vaddr, bool writable) {
 }
 
 /* Pins a collection of user pages (buffer) */
-bool
-pin_user_pages(void *buffer, size_t size) {
-    void *upage = pg_round_down(buffer);
-    void *end = buffer + size;
+// bool
+// pin_user_pages(void *buffer, size_t size) {
+//     void *upage = pg_round_down(buffer);
+//     void *end = buffer + size;
 
-    while (upage < end) {
-        if (!pin_frame(upage)) {
-            return false;
-        }
-        upage += PGSIZE;
-    }
+//     while (upage < end) {
+//         if (!pin_frame(upage)) {
+//             return false;
+//         }
+//         upage += PGSIZE;
+//     }
 
-    return true;
-}
+//     return true;
+// }
 
-/* Unpins a collection of user pages (buffer) */
-void
-unpin_user_pages(void *buffer, size_t size) {
-    void *upage = pg_round_down(buffer);
-    void *end = buffer + size;
+// /* Unpins a collection of user pages (buffer) */
+// void
+// unpin_user_pages(void *buffer, size_t size) {
+//     void *upage = pg_round_down(buffer);
+//     void *end = buffer + size;
 
-    while (upage < end) {
-        unpin_frame(upage);
-        upage += PGSIZE;
-    }
-}
+//     while (upage < end) {
+//         unpin_frame(upage);
+//         upage += PGSIZE;
+//     }
+// }
 
 bool
 check_user_pages_writable(void* buffer, size_t size) {

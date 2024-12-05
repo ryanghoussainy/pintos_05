@@ -751,6 +751,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           if (page == NULL) {
             return false;
           }
+          free(page->data);
           page->data = other->data;
           lock_acquire(&frame_lock);
           list_push_back(&page->data->pages, &page->data_elem);
@@ -761,10 +762,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           if (page == NULL) {
             return false;
           }
-          data = page->data;
-          data->file = file;
-          data->offset = ofs;
-          data->read_bytes = page_read_bytes;
+          page->data->file = file;
+          page->data->offset = ofs;
+          page->data->read_bytes = page_read_bytes;
         }
       }
 
