@@ -32,6 +32,13 @@ bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux U
 struct page *supp_page_table_get(struct hash *hash, void *vaddr);
 bool supp_page_table_insert(struct hash *hash, struct page *p);
 
+bool pin_frame(void *vaddr);
+void unpin_frame(void *vaddr);
+bool pin_user_pages(void *buffer, size_t size);
+void unpin_user_pages(void *buffer, size_t size);
+
+bool check_user_pages_writable(void* buffer, size_t size);
+
 struct frame *load_page(struct page *p);
 struct page *page_alloc(void *vaddr, bool writable);
 

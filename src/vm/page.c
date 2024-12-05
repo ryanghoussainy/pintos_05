@@ -138,3 +138,83 @@ page_alloc(void *vaddr, bool writable) {
     hash_insert(&cur->pg_table, &p->elem);
     return p;
 }
+
+/* Pins a frame to prevent it being evicted */
+bool
+pin_frame(void *vaddr) {
+    struct thread *cur = thread_current();
+    struct page *page = supp_page_table_get(&cur->pg_table, vaddr);
+    if (page) {
+        if (page->data == NULL || page->data->frame == NULL) {
+            // Load the page if it's not in memory
+            if (load_page(page) == NULL) {
+                return false;
+            }
+            if (!install_page(page->vaddr, page->data->frame->addr, page->data->writable)) {
+                return false;
+            }
+        }
+        lock_acquire(&frame_lock);
+        page->data->frame->pinned = true;
+        lock_release(&frame_lock);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/* Unpin a frame to allow eviction again */
+void
+unpin_frame(void *vaddr) {
+    struct thread *cur = thread_current();
+    struct page *page = supp_page_table_get(&cur->pg_table, vaddr);
+    if (page != NULL && page->data != NULL && page->data->frame != NULL) {
+        lock_acquire(&frame_lock);
+        page->data->frame->pinned = false;
+        lock_release(&frame_lock);
+    }
+}
+
+/* Pins a collection of user pages (buffer) */
+bool
+pin_user_pages(void *buffer, size_t size) {
+    void *upage = pg_round_down(buffer);
+    void *end = buffer + size;
+
+    while (upage < end) {
+        if (!pin_frame(upage)) {
+            return false;
+        }
+        upage += PGSIZE;
+    }
+
+    return true;
+}
+
+/* Unpins a collection of user pages (buffer) */
+void
+unpin_user_pages(void *buffer, size_t size) {
+    void *upage = pg_round_down(buffer);
+    void *end = buffer + size;
+
+    while (upage < end) {
+        unpin_frame(upage);
+        upage += PGSIZE;
+    }
+}
+
+bool check_user_pages_writable(void* buffer, size_t size) {
+    void *upage = pg_round_down(buffer);
+    void *end = buffer + size;
+    struct thread *cur = thread_current();
+
+    while (upage < end) {
+        struct page *page = supp_page_table_get(&cur->pg_table, upage);
+        if (page == NULL || !page->data->writable) {
+            return false;
+        }
+        upage += PGSIZE;
+    }
+
+    return true;
+}

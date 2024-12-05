@@ -368,7 +368,12 @@ sys_read (struct intr_frame *f)
     }
 
     /* Read from the file into the buffer, returning the bytes written. */
+    if (!pin_user_pages(buffer, size) || !check_user_pages_writable(buffer, size)) {
+      lock_release(&filesys_lock);
+      exit(-1);
+    }
     int read_characters = file_read(opened_file->file, buffer, size);
+    unpin_user_pages(buffer, size);
     lock_release(&filesys_lock);
     f->eax = read_characters;
   }
