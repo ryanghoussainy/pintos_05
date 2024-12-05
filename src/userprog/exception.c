@@ -163,9 +163,9 @@ page_fault (struct intr_frame *f)
 
    /* If the fault address appears to be in stack range then grow,
       otherwise continue. */
-  if (frame_alloc_stack(f->esp, fault_addr)) {
-   return;
-  }
+//   if (frame_alloc_stack(f->esp, fault_addr)) {
+//    return;
+//   }
 
   /* Round down the fault address to get the page address. */
   void *faddr = pg_round_down(fault_addr);

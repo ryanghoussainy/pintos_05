@@ -23,6 +23,7 @@ struct shared_data {
     bool writable;          /* Flag to indicate if the page is writable. */
     bool is_mmap;           /* Flag to indicate if the page is a memory mapped page. */
     size_t swap_slot;       /* Swap slot index for the page. */
+    bool swapped;           /* Flag to indicate if the page is swapped. */
     struct list pages;      /* List of pages. */
     struct lock lock;       /* Lock for synchronizing page access. */
 };

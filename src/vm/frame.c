@@ -1,6 +1,8 @@
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "devices/swap.h"
+#include "userprog/syscall.h"
+#include "filesys/file.h"
 
 /* Static pointer used for the Clock algorithm. */
 static struct frame *clock_hand;
@@ -115,6 +117,10 @@ frame_evict(struct frame *victim) {
     /* Choose a victim frame to evict. */
     // struct frame *victim = frame_choose_victim();
     ASSERT(victim != NULL);
+    // struct thread *owner = victim->owner;
+    // ASSERT(owner != NULL);
+
+    // struct shared_data *data = victim->page->data;
 
     // if (owner == NULL || owner->status == THREAD_DYING) {
     //     hash_delete(&frame_table, &victim->elem);
@@ -152,6 +158,7 @@ frame_evict(struct frame *victim) {
     }
 
     /* Get the page associated with the frame. */
+    // struct page *page = supp_page_table_get(&owner->pg_table, victim->page->vaddr);
     // if (page == NULL) {
     //     hash_delete(&frame_table, &victim->elem);
     //     palloc_free_page(victim->addr);
@@ -161,6 +168,20 @@ frame_evict(struct frame *victim) {
     // }
 
     /* Check if the page is dirty. */  
+    // bool dirty = pagedir_is_dirty(owner->pagedir, victim->page->vaddr);
+
+    // if (dirty) {
+    //     /* Swap out the page if it is dirty. */
+    //     size_t swap_slot = swap_out(victim->addr);
+    //     if (swap_slot == (size_t) -1) {
+    //         // lock_release(&data->lock);
+    //         PANIC("Swap failed during eviction");
+    //     }
+
+    //     /* Update supplemental page table. */
+    //     page->data->frame = NULL;
+    //     page->data->swap_slot = swap_slot; // Save swap slot index
+    // }
 
     /* Invalidate the page from the owner's page directory. */
     // pagedir_clear_page(owner->pagedir, victim->page);
@@ -171,11 +192,41 @@ frame_evict(struct frame *victim) {
 
     // palloc_free_page(victim->addr);
     // free(victim);
-}
 
-struct frame *
-get_first_frame(void) {
-
+  if ((data->file && !data->is_mmap) || !data->file)
+    {
+        /* Store the page into a swap slot
+        * if loaded from an executable or zero page. */
+        data->swap_slot = swap_out (data->frame->addr);
+        /* Return false if the swap slot is full. */
+        if (data->swap_slot == (size_t) -1)
+        PANIC ("Failed to swap out page during eviction");
+        data->swapped = true;
+        data->frame = NULL;
+        // lock_release (&data->lock);
+        return;
+    }
+  if (data->file && data->is_mmap)
+    {
+        /* Store the page into the file if memory mapped.
+        * No need to write back if the page is not dirty. */
+        if (pagedir_are_any_dirty (&data->pages))
+        {
+        //   if (lock_held_by_current_thread (&filesys_lock))
+            // release_file_lock ();
+        int written_bytes = file_write_at (data->file, data->frame->addr, data->read_bytes, data->offset);
+        //   if (acquired)
+            // release_file_lock ();
+        if (data->read_bytes != (size_t) written_bytes)
+        {
+            // lock_release (&data->lock);
+            PANIC ("Failed to write back memory mapped page during eviction");
+        }
+        }
+        data->frame = NULL;
+        // lock_release (&data->lock);
+        return;
+    }
 }
 
 /* Chooses a frame to evict using the Clock algorithm. */
@@ -194,9 +245,12 @@ frame_choose_victim(void) {
     while (victim == NULL) {
         // if (!clock_hand->pinned) {
         // lock_acquire(&frame_lock);
-            // if (pagedir_is_accessed(clock_hand->owner->pagedir, clock_hand->data->vaddr)) {
-            //     pagedir_set_accessed(clock_hand->owner->pagedir, clock_hand->data->vaddr, false);
+            // if (pagedir_is_accessed(clock_hand->owner->pagedir, clock_hand->page->vaddr)) {
+            //     pagedir_set_accessed(clock_hand->owner->pagedir, clock_hand->page->vaddr, false);
             //     // clock_hand->pinned = false;
+            // } else {
+            //     victim = clock_hand;
+            // }
 
             struct list pages = clock_hand->data->pages;
             bool none_accessed = true;
