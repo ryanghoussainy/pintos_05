@@ -188,20 +188,7 @@ page_fault (struct intr_frame *f)
          goto page_fault;
       }
   } else {
-      /* Check if stack needs to grow. */
-      if (!frame_alloc_stack(f->esp, faddr)) {
-          goto page_fault;
-      }
-
-      /* Try to allocate a new page and allocate a frame for it. */
-      struct page *new_page = page_alloc(faddr, true);
-      if (new_page == NULL) {
-          goto page_fault;
-      }
-      struct frame *frame = load_page(new_page);
-      if (frame == NULL) {
-          goto page_fault;
-      }
+      goto page_fault;
   }
 
   return;
