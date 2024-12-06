@@ -174,8 +174,25 @@ page_fault (struct intr_frame *f)
   struct thread *cur = thread_current();
 
   /* Check if the faulting page is in the supplemental page table. */
-  struct page *found_page = supp_page_table_get(&cur->pg_table, fault_addr);
+  struct page *found_page = spt_get(&cur->spt, fault_addr);
   if (found_page) {
+      /* If we are trying to write to a read-only shared page, we need to copy the shared page structure. */
+      if (write && !found_page->data->writable && found_page->data->file != NULL) {
+            /* Allocate a new shared page data for the page. */
+            struct shared_data *new_data = copy_shared_data(found_page);
+            if (new_data == NULL) {
+                goto page_fault;
+            }
+
+            /* Point the page to the new shared data. */
+            found_page->data = new_data;
+
+            /* Set the new page to writable. */
+            found_page->data->writable = true;
+            
+            return;
+      }
+
       /* Allocate a new frame for the page. */
       struct frame *frame = load_page(found_page);
       if (frame == NULL) {

@@ -155,18 +155,46 @@ process_execute (const char *command)
   /* Get link with child */
   struct link *child_link = valid_child_tid(tid);
   if (child_link == NULL) {
-    tid = TID_ERROR;
+    return TID_ERROR;
   }
 
   /* Wait for child to load */
   sema_down(&child_link->load_sema);
   if (child_link->load_status == LOAD_FAILED) {
-    tid = TID_ERROR;
+    return TID_ERROR;
   }
 
   /* Free the command name and command copy */
   free(command_name);
   palloc_free_page (fn_copy);
+
+  if (thread_current()->exec_file != NULL) {
+    /* Share pages if the child has the same executable */
+    if (file_compare(thread_current()->exec_file, child_link->child->exec_file)) {
+      struct hash_iterator i;
+      hash_first(&i, &thread_current()->spt);
+      while (hash_next(&i))
+        {
+          struct page *p = hash_entry(hash_cur(&i), struct page, elem);
+
+          /* Allocate a page */
+          struct page *new_page = page_alloc(p->vaddr, p->data->writable);
+          if (new_page == NULL) {
+            return TID_ERROR;
+          }
+          
+          /* Share the same shared_data structure */
+          free(new_page->data);
+          new_page->data = p->data;
+
+          /* Set shared data to read-only */
+          p->data->writable = false;
+
+          /* Insert the new page into the child's SPT */
+          spt_insert(&child_link->child->spt, new_page);
+        }
+    }
+  }
 
   return tid;
 }
@@ -349,7 +377,7 @@ process_exit (void)
 
   /* Free swap slots used by the process. */
   struct hash_iterator j;
-  hash_first(&j, &cur->pg_table);
+  hash_first(&j, &cur->spt);
   while (hash_next(&j))
   {
     struct page *p = hash_entry(hash_cur(&j), struct page, elem);
@@ -362,7 +390,7 @@ process_exit (void)
 
   /* Free hash table and containing data */
   hash_destroy(&cur->file_descriptors, fd_destroy);
-  hash_destroy(&cur->pg_table, page_destroy);
+  hash_destroy(&cur->spt, page_destroy);
   hash_destroy(&cur->mmap_table, mapping_destroy);
 
   /* Allow write back to executable once exited */
@@ -723,51 +751,59 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get the thread that is executing the same executable file. */
-      struct thread *t = thread_get_by_exec_file(file);
+      // /* Get the thread that is executing the same executable file. */
+      // struct thread *t = thread_get_by_exec_file(file);
 
-      /* Get the page from the supplemental page table. */
-      struct page *page = supp_page_table_get(&thread_current()->pg_table, upage);
-      struct shared_data *data;
+      // /* Get the page from the supplemental page table. */
+      // struct page *page = spt_get(&thread_current()->spt, upage);
+      // struct shared_data *data;
 
-      /* If page exists in page table, overwrite read_bytes and writable. */
-      if (page) {
-        data = page->data;
-        if (data->read_bytes < page_read_bytes) {
-          data->read_bytes = page_read_bytes;
-          data->writable |= writable;
-        }
-      } else {
-        struct page *other = NULL;
+      // /* If page exists in page table, overwrite read_bytes and writable. */
+      // if (page) {
+      //   data = page->data;
+      //   if (data->read_bytes < page_read_bytes) {
+      //     data->read_bytes = page_read_bytes;
+      //     data->writable |= writable;
+      //   }
+      // } else {
+      //   struct page *other = NULL;
 
-        /* If there is a thread with the same executable, find the page for sharing. */
-        if (t) {
-          struct hash *page_table = &t->pg_table;
-          other = supp_page_table_get(page_table, upage);
-        }
+      //   /* If there is a thread with the same executable, find the page for sharing. */
+      //   if (t) {
+      //     struct hash *page_table = &t->spt;
+      //     other = spt_get(page_table, upage);
+      //   }
 
-        /* If there is a page to share, use its data. */
-        if (other && !other->data->writable) {
-          page = page_alloc(upage, writable);
-          if (page == NULL) {
-            return false;
-          }
-          free(page->data);
-          page->data = other->data;
-          lock_acquire(&frame_lock);
-          list_push_back(&page->data->pages, &page->data_elem);
-          lock_release(&frame_lock);
-        } else {
-          /* Otherwise, allocate a new page. */
-          page = page_alloc(upage, writable);
-          if (page == NULL) {
-            return false;
-          }
-          page->data->file = file;
-          page->data->offset = ofs;
-          page->data->read_bytes = page_read_bytes;
-        }
+      //   /* If there is a page to share, use its data. */
+      //   if (other && !other->data->writable) {
+      //     page = page_create(upage, writable);
+      //     if (page == NULL) {
+      //       return false;
+      //     }
+      //     free(page->data);
+      //     page->data = other->data;
+      //     lock_acquire(&frame_lock);
+      //     list_push_back(&page->data->pages, &page->data_elem);
+      //     lock_release(&frame_lock);
+      //   } else {
+      //     /* Otherwise, allocate a new page. */
+      //     page = page_create(upage, writable);
+      //     if (page == NULL) {
+      //       return false;
+      //     }
+      //     page->data->file = file;
+      //     page->data->offset = ofs;
+      //     page->data->read_bytes = page_read_bytes;
+      //   }
+      // }
+
+      struct page *page = page_create(upage, writable);
+      if (page == NULL) {
+        return false;
       }
+      page->data->file = file;
+      page->data->offset = ofs;
+      page->data->read_bytes = page_read_bytes;
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -788,7 +824,7 @@ setup_stack (void **esp, char **argv, int argc)
   void *uaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
 
   /* Allocate a new page to the stack. */
-  kpage = page_alloc(uaddr, true);
+  kpage = page_create(uaddr, true);
 
   /* Allocate a frame for the page since first page in stack is not lazy loaded. */
   kpage->data->frame = frame_alloc(kpage);

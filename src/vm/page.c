@@ -23,7 +23,7 @@ page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED
 
 /* Get a page from the supplemental page table. */
 struct page * 
-supp_page_table_get(struct hash *hash, void *vaddr)
+spt_get(struct hash *hash, void *vaddr)
 {
     /* Align the virtual address to the nearest page boundary. */
     vaddr = pg_round_down(vaddr);
@@ -45,7 +45,7 @@ supp_page_table_get(struct hash *hash, void *vaddr)
 
 /* Insert a page into the supplemental page table. */
 bool
-supp_page_table_insert(struct hash *hash, struct page *p)
+spt_insert(struct hash *hash, struct page *p)
 {
   struct hash_elem *found = hash_insert(hash, &p->elem);
   return found == NULL;
@@ -122,6 +122,54 @@ load_page(struct page *page) {
     return frame;
 }
 
+/* Returns a copy of shared page data. */
+struct shared_data *
+copy_shared_data(struct page *page) {
+    /* Allocate shared data */
+    struct shared_data *new_data = malloc(sizeof(struct shared_data));
+    if (new_data == NULL) {
+        return NULL;
+    }
+
+    /* Copy shared data */
+    new_data->frame = NULL;
+    new_data->file = page->data->file;
+    new_data->offset = page->data->offset;
+    new_data->read_bytes = page->data->read_bytes;
+    new_data->writable = page->data->writable;
+    new_data->is_mmap = page->data->is_mmap;
+    new_data->swap_slot = (size_t) -1;
+    list_init(&new_data->pages);
+    lock_init(&new_data->lock);
+
+    /* Remove the found page from the list of pages in the old shared data. */
+    lock_acquire(&page->data->lock);
+    list_remove(&page->data_elem);
+    lock_release(&page->data->lock);
+
+    /* Add page to new shared data. */
+    lock_acquire(&new_data->lock);
+    list_push_back(&new_data->pages, &page->data_elem);
+    lock_release(&new_data->lock);
+
+    return new_data;
+}
+
+/* Create a page structure. Add it to the current thread's SPT. */
+struct page *
+page_create(void *vaddr, bool writable) {
+    struct page *p = page_alloc(vaddr, writable);
+    if (p == NULL) {
+        return NULL;
+    }
+    struct thread *cur = thread_current();
+    if (!spt_insert(&cur->spt, p)) {
+        free(p);
+        return NULL;
+    }
+    return p;
+}
+
 /* Allocate a page, returning the page. */
 struct page *
 page_alloc(void *vaddr, bool writable) {
@@ -154,8 +202,6 @@ page_alloc(void *vaddr, bool writable) {
     list_push_back(&p->data->pages, &p->data_elem);
     lock_release(&p->data->lock);
 
-    /* Insert the page into the supplemental page table. */
-    hash_insert(&cur->pg_table, &p->elem);
     return p;
 }
 
@@ -194,7 +240,7 @@ check_user_pages_writable(void* buffer, size_t size) {
     struct thread *cur = thread_current();
 
     while (upage < end) {
-        struct page *page = supp_page_table_get(&cur->pg_table, upage);
+        struct page *page = spt_get(&cur->spt, upage);
         if (page == NULL || !page->data->writable) {
             return false;
         }
