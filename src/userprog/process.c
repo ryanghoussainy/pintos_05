@@ -195,9 +195,6 @@ process_execute (const char *command)
           /* Add the new page to the new data's list of pages */
           list_push_back(&new_page->data->pages, &new_page->data_elem);
 
-          /* Set shared data to read-only */
-          p->data->writable = false;
-
           /* Insert the new page into the child's SPT */
           spt_insert(&child_link->child->spt, new_page);
         }
@@ -757,7 +754,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          We will read PAGE_READ_BYTES bytes from FILE
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-      size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       // /* Get the thread that is executing the same executable file. */
       // struct thread *t = thread_get_by_exec_file(file);
@@ -815,7 +811,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Advance. */
       read_bytes -= page_read_bytes;
-      zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
       ofs += page_read_bytes;
     }
