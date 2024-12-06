@@ -248,7 +248,6 @@ frame_evict(struct frame *victim) {
 /* Chooses a frame to evict using the Clock algorithm. */
 static struct frame *
 frame_choose_victim(void) {
-    struct hash_iterator i;
     struct frame *victim = NULL;
     // int max_age = 0;
 
@@ -266,11 +265,11 @@ frame_choose_victim(void) {
     
     /* Iterate through the frame table until a victim is found. */
     while (scanned < TWO_CHANCES * frame_count) {
-        struct list pages = clock_hand->data->pages;
+        struct shared_data *data = clock_hand->data;
         bool none_accessed = true;
 
         struct list_elem *e;
-        for (e = list_begin(&pages); e != list_end(&pages); e = list_next(e)) {
+        for (e = list_begin(&data->pages); e != list_end(&data->pages); e = list_next(e)) {
             struct page *page = list_entry(e, struct page, data_elem);
             printf("page: %p\n", page->vaddr);
             if (pagedir_is_accessed(page->owner->pagedir, page->vaddr)) {
