@@ -183,9 +183,17 @@ process_execute (const char *command)
             return TID_ERROR;
           }
           
-          /* Share the same shared_data structure */
+          /* Remove the new page from old data's list of pages */
+          list_remove(&new_page->data_elem);
+
+          /* Free the old data */
           free(new_page->data);
+          
+          /* Share the same shared_data structure */
           new_page->data = p->data;
+
+          /* Add the new page to the new data's list of pages */
+          list_push_back(&new_page->data->pages, &new_page->data_elem);
 
           /* Set shared data to read-only */
           p->data->writable = false;

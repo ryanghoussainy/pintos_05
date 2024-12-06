@@ -401,7 +401,6 @@ frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSE
 static struct frame *
 next_frame(struct frame *current) 
 {
-    // Have to use an iterator to get the next frame after current
     struct hash_iterator i;
     hash_first(&i, &frame_table);
     struct frame *f = hash_entry(hash_cur(&i), struct frame, elem);
@@ -414,5 +413,5 @@ next_frame(struct frame *current)
             f = hash_entry(next, struct frame, elem);
         }
     }
-    return f;   
+    return f;
 }
