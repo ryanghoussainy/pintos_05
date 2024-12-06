@@ -69,7 +69,11 @@ load_page(struct page *page) {
     /* Check if the current thread holds the file system lock */
     bool cur_holds_filesys = lock_held_by_current_thread(&filesys_lock);
 
-    lock_acquire(&data->lock);
+    bool cur_holds_data_lock = lock_held_by_current_thread(&data->lock);
+
+    if (!cur_holds_data_lock) {
+        lock_acquire(&data->lock);
+    }
 
     /* Load the page into the frame */
     if (data->swapped) {
@@ -84,7 +88,7 @@ load_page(struct page *page) {
     }
 
     /* Read the page from the file into the frame */ 
-    if (data->file != NULL) {
+    else if (data->file != NULL) {
         if (!cur_holds_filesys) 
             lock_acquire(&filesys_lock);
 
@@ -93,7 +97,9 @@ load_page(struct page *page) {
             if (!cur_holds_filesys)
                 lock_release(&filesys_lock);
 
-            lock_release(&data->lock);
+            if (!cur_holds_data_lock) {
+                lock_release(&data->lock);
+            }
             return NULL;
         }
         if (!cur_holds_filesys)
@@ -111,11 +117,16 @@ load_page(struct page *page) {
         struct page *page = list_entry (elem, struct page, data_elem);
         if (!install_page(page->vaddr, frame_addr, page->data->writable)) {
             frame_free(data->frame);
-            lock_release(&data->lock);
+            if (!cur_holds_data_lock) {
+                lock_release(&data->lock);
+            }
             return NULL;
         }
     }
-    lock_release(&data->lock);
+    
+    if (!cur_holds_data_lock) {
+        lock_release(&data->lock);
+    }
     return frame;
 }
 

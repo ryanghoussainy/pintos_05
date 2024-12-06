@@ -11,7 +11,6 @@ static struct frame *clock_hand;
 
 static void frame_evict(struct frame *victim);
 static struct frame *frame_choose_victim(void);
-static bool lock_frame(struct frame *frame);
 static unsigned frame_hash(const struct hash_elem *elem, void *aux UNUSED);
 static bool frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
 
@@ -89,7 +88,11 @@ frame_evict(struct frame *victim)
     /* Retrieve the metadata of the victim frame. */
     struct shared_data *data = victim->data;
 
-    lock_acquire(&data->lock);
+    bool cur_holds_data_lock = lock_held_by_current_thread(&data->lock);
+
+    if (!cur_holds_data_lock) {
+        lock_acquire(&data->lock);
+    }
 
     /* Clear all pages sharing the same data. */
     struct list_elem *elem;
@@ -110,7 +113,10 @@ frame_evict(struct frame *victim)
         }
         data->swapped = true;
         data->frame = NULL;
-        lock_release (&data->lock);
+        if (!cur_holds_data_lock) {
+            lock_release(&data->lock);
+        }
+
     }
     
     /* Case 2: Memory-mapped data segment pages. */
@@ -133,7 +139,9 @@ frame_evict(struct frame *victim)
             }
         }
         data->frame = NULL;
-        lock_release (&data->lock);
+        if (!cur_holds_data_lock) {
+            lock_release(&data->lock);
+        }
     }
     return;
 }
@@ -164,15 +172,27 @@ frame_choose_victim(void)
         struct list_elem *e;
         for (e = list_begin(pages); e != list_end(pages); e = list_next(e)) {
             struct page *page = list_entry(e, struct page, data_elem);
-            lock_acquire(&page->data->lock);
+
+            bool hold_lock = lock_held_by_current_thread(&page->data->lock);
+            
+            if (!hold_lock) {
+                lock_acquire(&page->data->lock);
+            }
 
             if (pagedir_is_accessed(page->owner->pagedir, page->vaddr)) {
                 pagedir_set_accessed(page->owner->pagedir, page->vaddr, false);
                 none_accessed = false;
-                lock_release(&page->data->lock);
+                
+                if (!hold_lock) {
+                    lock_release(&page->data->lock);
+                }
+
                 break;
             }
-            lock_release(&page->data->lock);
+            
+            if (!hold_lock) {
+                lock_release(&page->data->lock);
+            }
         }
 
         /* If none of the pages are accessed, the frame is the victim. */

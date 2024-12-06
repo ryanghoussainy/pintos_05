@@ -754,7 +754,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
-  file_seek (file, ofs);
+  // file_seek (file, ofs);
 
   while (read_bytes > 0 || zero_bytes > 0) 
     {
@@ -763,52 +763,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      // /* Get the thread that is executing the same executable file. */
-      // struct thread *t = thread_get_by_exec_file(file);
-
-      // /* Get the page from the supplemental page table. */
-      // struct page *page = spt_get(&thread_current()->spt, upage);
-      // struct shared_data *data;
-
-      // /* If page exists in page table, overwrite read_bytes and writable. */
-      // if (page) {
-      //   data = page->data;
-      //   if (data->read_bytes < page_read_bytes) {
-      //     data->read_bytes = page_read_bytes;
-      //     data->writable |= writable;
-      //   }
-      // } else {
-      //   struct page *other = NULL;
-
-      //   /* If there is a thread with the same executable, find the page for sharing. */
-      //   if (t) {
-      //     struct hash *page_table = &t->spt;
-      //     other = spt_get(page_table, upage);
-      //   }
-
-      //   /* If there is a page to share, use its data. */
-      //   if (other && !other->data->writable) {
-      //     page = page_create(upage, writable);
-      //     if (page == NULL) {
-      //       return false;
-      //     }
-      //     free(page->data);
-      //     page->data = other->data;
-      //     lock_acquire(&frame_lock);
-      //     list_push_back(&page->data->pages, &page->data_elem);
-      //     lock_release(&frame_lock);
-      //   } else {
-      //     /* Otherwise, allocate a new page. */
-      //     page = page_create(upage, writable);
-      //     if (page == NULL) {
-      //       return false;
-      //     }
-      //     page->data->file = file;
-      //     page->data->offset = ofs;
-      //     page->data->read_bytes = page_read_bytes;
-      //   }
-      // }
 
       struct page *page = page_create(upage, writable);
       if (page == NULL) {
@@ -822,7 +776,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
-      ofs += page_read_bytes;
+      ofs += PGSIZE;
     }
   return true;
 }
@@ -926,20 +880,7 @@ frame_alloc_stack(void *esp, void* faddr) {
     }
     
     kpage = page_create(new_stack_addr, true);
-    // kpage->data->frame = frame_alloc(kpage->data);
-    struct frame *frame = load_page(kpage);
-    success = frame != NULL;
-
-    if (kpage != NULL && kpage->data->frame != NULL) {
-
-      // success = install_page (new_stack_addr, kpage->data->frame->addr, true);
-
-      if (!success) {
-        frame_free(kpage->data->frame);
-      }
-
-      return success;
-    }
+    return kpage != NULL;
   }
 
   return false;
