@@ -168,31 +168,27 @@ frame_choose_victim(void)
         struct list *pages = &clock_hand->data->pages;
         bool none_accessed = true;
 
+        bool cur_holds_data_lock = lock_held_by_current_thread(&clock_hand->data->lock);
+
+        if (!cur_holds_data_lock) {
+            lock_acquire(&clock_hand->data->lock);
+        }
+
         /* Iterate through the pages of the frame to see if any of them are accessed. */
         struct list_elem *e;
         for (e = list_begin(pages); e != list_end(pages); e = list_next(e)) {
             struct page *page = list_entry(e, struct page, data_elem);
 
-            bool hold_lock = lock_held_by_current_thread(&page->data->lock);
-            
-            if (!hold_lock) {
-                lock_acquire(&page->data->lock);
-            }
-
             if (pagedir_is_accessed(page->owner->pagedir, page->vaddr)) {
                 pagedir_set_accessed(page->owner->pagedir, page->vaddr, false);
                 none_accessed = false;
-                
-                if (!hold_lock) {
-                    lock_release(&page->data->lock);
-                }
 
                 break;
             }
-            
-            if (!hold_lock) {
-                lock_release(&page->data->lock);
-            }
+        }
+
+        if (!cur_holds_data_lock) {
+            lock_release(&clock_hand->data->lock);
         }
 
         /* If none of the pages are accessed, the frame is the victim. */
@@ -221,10 +217,11 @@ frame_choose_victim(void)
 
     /* Move the clock hand to the next frame in preparation for next eviction. */
     if (!hash_next(&i)) {
-            hash_first(&i, &frame_table);
-            hash_next(&i);
+        hash_first(&i, &frame_table);
+        hash_next(&i);
     }
     clock_hand = hash_entry(hash_cur(&i), struct frame, elem);
+
     return victim;
 }
 

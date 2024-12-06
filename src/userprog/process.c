@@ -344,23 +344,6 @@ static void
 page_destroy(struct hash_elem *e, void *aux UNUSED)
 {
   struct page *p = hash_entry(e, struct page, elem);
-  // if (p->data != NULL) {
-
-  //   if (p->data->frame != NULL) {
-  //     pagedir_clear_page(p->owner->pagedir, p->vaddr);
-  //   }
-    
-  //   lock_acquire(&p->data->lock);
-  //   list_remove(&p->data_elem);
-  //   if (list_empty(&p->data->pages)) {
-  //     if (p->data->frame != NULL) {
-  //       frame_free(p->data->frame->addr);
-  //     }
-  //     free(p->data);
-  //   } else {
-  //     lock_release(&p->data->lock);
-  //   }
-  // }
   free(p);
 }
 
@@ -754,8 +737,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
-  // file_seek (file, ofs);
-
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -794,12 +775,10 @@ setup_stack (void **esp, char **argv, int argc)
   kpage = page_create(uaddr, true);
 
   /* Allocate a frame for the page since first page in stack is not lazy loaded. */
-  // kpage->data->frame = frame_alloc(kpage->data);
   struct frame *frame = load_page(kpage);
   success = frame != NULL;
   if (kpage != NULL && kpage->data->frame != NULL) 
     {
-      // success = install_page (uaddr, kpage->data->frame->addr, true);
       if (success)
         {
           /* Start at the bottom of the stack */

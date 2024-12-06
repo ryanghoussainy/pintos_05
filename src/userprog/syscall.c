@@ -343,8 +343,6 @@ sys_read (struct intr_frame *f)
     return;
   }
 
-  // pin_user_pages(buffer, size);
-
   /* Check if the file descriptor is valid. */
   if (fd == STDOUT_FILENO) {
     /* Cannot read from stdout. */
@@ -369,20 +367,14 @@ sys_read (struct intr_frame *f)
       return;
     }
 
-    /* Read from the file into the buffer, returning the bytes written. */
-    // if (!pin_user_pages(buffer, size) || !check_user_pages_writable(buffer, size)) {
-    //   lock_release(&filesys_lock);
-    //   exit(-1);
-    // }
     if (!check_user_pages_writable(buffer, size)) {
       lock_release(&filesys_lock);
       exit(-1);
     }
     int read_characters = file_read(opened_file->file, buffer, size);
-    // unpin_user_pages(buffer, size);
+    
     lock_release(&filesys_lock);
 
-    // unpin_user_pages(buffer, size);
     f->eax = read_characters;
   }
 }
