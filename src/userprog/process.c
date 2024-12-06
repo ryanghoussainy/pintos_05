@@ -24,6 +24,7 @@
 #include "vm/page.h"
 #include "devices/swap.h"
 #include "threads/thread.h"
+#include "lib/kernel/bitmap.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv, int argc);
@@ -378,14 +379,14 @@ process_exit (void)
   struct hash_iterator j;
   hash_first(&j, &cur->spt);
   while (hash_next(&j))
-    {
-      struct page *p = hash_entry(hash_cur(&j), struct page, elem);
-      if (p->data->swap_slot != (size_t) -1)
-        {
-          swap_drop(p->data->swap_slot);
-          p->data->swap_slot = (size_t) -1;
-        }
-    }
+  {
+    struct page *p = hash_entry(hash_cur(&j), struct page, elem);
+    if (p->data->swap_slot != BITMAP_ERROR)
+      {
+        swap_drop(p->data->swap_slot);
+        p->data->swap_slot = BITMAP_ERROR;
+      }
+  }
 
   /* Free hash table and containing data */
   hash_destroy(&cur->file_descriptors, fd_destroy);

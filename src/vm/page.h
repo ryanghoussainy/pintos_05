@@ -23,6 +23,7 @@ struct shared_data {
     bool writable;          /* Flag to indicate if the page is writable. */
     bool is_mmap;           /* Flag to indicate if the page is a memory mapped page. */
     size_t swap_slot;       /* Swap slot index for the page. */
+    bool swapped;           /* Flag to indicate if the page is swapped. */
     struct list pages;      /* List of pages. */
     struct lock lock;       /* Lock for synchronizing page access. */
 };
@@ -37,6 +38,7 @@ void unpin_user_pages(void *buffer, size_t size);
 
 bool check_user_pages_writable(void* buffer, size_t size);
 
+struct shared_data *copy_shared_data(struct page *page);
 struct frame *load_page(struct page *p);
 struct page *page_create(void *vaddr, bool writable);
 struct page *page_alloc(void *vaddr, bool writable);

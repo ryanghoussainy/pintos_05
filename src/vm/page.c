@@ -4,6 +4,7 @@
 #include "filesys/file.h"
 #include "devices/swap.h"
 #include <string.h>
+#include "lib/kernel/bitmap.h"
 
 /* Page hash function. */
 unsigned
@@ -57,7 +58,8 @@ load_page(struct page *page) {
 
     /* Obtain a frame to store the page */
     struct frame *frame = frame_alloc(page);
-    void *frame_addr = frame->addr;
+    data->frame = frame;
+    void *frame_addr = data->frame->addr;
     if (frame_addr == NULL) {
         PANIC("Out of memory: Frame allocation failed.");
     }
@@ -71,12 +73,22 @@ load_page(struct page *page) {
     bool cur_holds_filesys = lock_held_by_current_thread(&filesys_lock);
 
     /* Load the page into the frame */
+    if (data->swapped) {
+        swap_in(frame_addr, data->swap_slot);
+        struct list_elem *elem;
+        for (elem = list_begin (&data->pages); elem != list_end (&data->pages); elem = list_next (elem))
+            {
+                struct page *page = list_entry (elem, struct page, data_elem);
+                pagedir_set_dirty (page->owner->pagedir, page->vaddr, true);
+            }
+        data->swapped = false;
+    } 
     if (data->file != NULL) {
         if (!cur_holds_filesys) 
             lock_acquire(&filesys_lock);
 
         if (file_read_at(data->file, frame_addr, data->read_bytes, data->offset) != (int) data->read_bytes) {
-            frame_free(frame);
+            frame_free(data->frame);
             if (!cur_holds_filesys)
                 lock_release(&filesys_lock);
             return NULL;
@@ -85,9 +97,6 @@ load_page(struct page *page) {
             lock_release(&filesys_lock);
             
         memset(frame_addr + data->read_bytes, 0, PGSIZE - data->read_bytes);
-    } else if (data->swap_slot != (size_t) -1) {
-        swap_in(frame_addr, data->swap_slot);
-        data->swap_slot = (size_t) -1;
     } else {
         memset(frame_addr, 0, PGSIZE);
     }
@@ -98,17 +107,17 @@ load_page(struct page *page) {
     // lock_release(&frame_lock);
 
     /* Find the corresponding frame in the frame table. */
-    lock_acquire(&frame_lock);
-    struct frame f_temp;
-    f_temp.addr = frame_addr;
-    struct hash_elem *e = hash_find(&frame_table, &f_temp.elem);
-    if (e == NULL) {
-        lock_release(&frame_lock);
-        PANIC("Frame not found in frame table after allocation");
-    }
-    struct frame *f = hash_entry(e, struct frame, elem);
-    data->frame = f;
-    lock_release(&frame_lock);
+    // lock_acquire(&frame_lock);
+    // struct frame f_temp;
+    // f_temp.addr = frame_addr;
+    // struct hash_elem *e = hash_find(&frame_table, &f_temp.elem);
+    // if (e == NULL) {
+    //     lock_release(&frame_lock);
+    //     PANIC("Frame not found in frame table after allocation");
+    // }
+    // struct frame *f = hash_entry(e, struct frame, elem);
+    // data->frame = f;
+    // lock_release(&frame_lock);
 
     return frame;
 }
@@ -185,7 +194,8 @@ page_alloc(void *vaddr, bool writable) {
     p->data->file = NULL;
     p->data->writable = writable;
     p->data->is_mmap = false;
-    p->data->swap_slot = (size_t) -1;
+    p->data->swap_slot = 0;
+    p->data->swapped = false;
     list_init(&p->data->pages);
     lock_init(&p->data->lock);
     lock_acquire(&p->data->lock);
@@ -231,7 +241,7 @@ check_user_pages_writable(void* buffer, size_t size) {
 
     while (upage < end) {
         struct page *page = spt_get(&cur->spt, upage);
-        if (page == NULL || !page->data->writable) {
+        if (page != NULL && !page->data->writable) {
             return false;
         }
         upage += PGSIZE;

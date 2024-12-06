@@ -289,3 +289,17 @@ invalidate_pagedir (uint32_t *pd)
       pagedir_activate (pd);
     } 
 }
+
+/* Returns true if any page in its process's page table is marked dirty. */
+bool
+pagedir_are_any_dirty (struct list *pages)
+{
+  bool dirty = false;
+  struct list_elem *elem;
+  for (elem = list_begin (pages); elem != list_end (pages); elem = list_next (elem))
+  {
+    struct page *page = list_entry (elem, struct page, data_elem);
+    dirty |= pagedir_is_dirty (page->owner->pagedir, page->vaddr);
+  }
+  return dirty;
+}

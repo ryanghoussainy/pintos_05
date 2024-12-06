@@ -220,4 +220,13 @@ page_fault:
           write ? "writing" : "reading",
           user ? "user" : "kernel");
   kill (f);
+
+  /* If fault occurred in user mode, terminate the process. */
+   if (user) {
+      thread_current()->exit_status = -1;
+      kill(f);
+   } else {
+      PANIC("Page fault in kernel mode");
+   }
+
 }
