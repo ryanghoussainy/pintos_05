@@ -292,7 +292,7 @@ invalidate_pagedir (uint32_t *pd)
 
 /* Returns true if any page in its process's page table is marked dirty. */
 bool
-pagedir_are_any_dirty (struct list *pages)
+pagedir_any_dirty (struct list *pages)
 {
   bool dirty = false;
   struct list_elem *elem;

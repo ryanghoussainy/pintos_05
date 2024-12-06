@@ -17,6 +17,6 @@ void pagedir_set_accessed (uint32_t *pd, const void *upage, bool accessed);
 bool pagedir_is_writable (uint32_t *pd, const void *upage);
 void pagedir_set_writable (uint32_t *pd, const void *upage, bool writable);
 void pagedir_activate (uint32_t *pd);
-bool pagedir_are_any_dirty (struct list *pages);
+bool pagedir_any_dirty (struct list *pages);
 
 #endif /* userprog/pagedir.h */

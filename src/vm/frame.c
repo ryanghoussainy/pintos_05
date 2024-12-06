@@ -123,7 +123,7 @@ frame_evict(struct frame *victim)
     else if (data->file && data->is_mmap)
     {
         /* No need to write back if the page is not dirty. */
-        if (pagedir_are_any_dirty (&data->pages))
+        if (pagedir_any_dirty (&data->pages))
         {
             bool hold_lock = lock_held_by_current_thread (&filesys_lock);
             if (hold_lock) {
