@@ -8,14 +8,16 @@
 
 /* Page hash function. */
 unsigned
-page_hash(const struct hash_elem *elem, void *aux UNUSED) {
+page_hash(const struct hash_elem *elem, void *aux UNUSED) 
+{
     const struct page *p = hash_entry(elem, struct page, elem);
     return hash_bytes(&p->vaddr, sizeof p->vaddr);
 }
 
 /* Page comparison function. */
 bool
-page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
+page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) 
+{
     const struct page *p_a = hash_entry(a, struct page, elem);
     const struct page *p_b = hash_entry(b, struct page, elem);
     return p_a->vaddr < p_b->vaddr;
@@ -64,16 +66,10 @@ load_page(struct page *page) {
         PANIC("Out of memory: Frame allocation failed.");
     }
 
-    /* Pin the frame. */
-    // lock_acquire(&frame_lock);
-    // page->data->frame->pinned = true;
-    // lock_release(&frame_lock);
-
     /* Check if the current thread holds the file system lock */
     bool cur_holds_filesys = lock_held_by_current_thread(&filesys_lock);
 
-    // // Zero out the page
-    // memset(frame_addr, 0, PGSIZE);
+    lock_acquire(&data->lock);
 
     /* Load the page into the frame */
     if (data->swapped) {
@@ -85,7 +81,9 @@ load_page(struct page *page) {
                 pagedir_set_dirty (page->owner->pagedir, page->vaddr, true);
             }
         data->swapped = false;
-    } 
+    }
+
+    /* Read the page from the file into the frame */ 
     if (data->file != NULL) {
         if (!cur_holds_filesys) 
             lock_acquire(&filesys_lock);
@@ -94,6 +92,8 @@ load_page(struct page *page) {
             frame_free(data->frame);
             if (!cur_holds_filesys)
                 lock_release(&filesys_lock);
+
+            lock_release(&data->lock);
             return NULL;
         }
         if (!cur_holds_filesys)
@@ -111,34 +111,18 @@ load_page(struct page *page) {
         struct page *page = list_entry (elem, struct page, data_elem);
         if (!install_page(page->vaddr, frame_addr, page->data->writable)) {
             frame_free(data->frame);
+            lock_release(&data->lock);
             return NULL;
         }
     }
-
-    /* Pin the frame. */
-    // lock_acquire(&frame_lock);
-    // page->data->frame->pinned = true;
-    // lock_release(&frame_lock);
-
-    /* Find the corresponding frame in the frame table. */
-    // lock_acquire(&frame_lock);
-    // struct frame f_temp;
-    // f_temp.addr = frame_addr;
-    // struct hash_elem *e = hash_find(&frame_table, &f_temp.elem);
-    // if (e == NULL) {
-    //     lock_release(&frame_lock);
-    //     PANIC("Frame not found in frame table after allocation");
-    // }
-    // struct frame *f = hash_entry(e, struct frame, elem);
-    // data->frame = f;
-    // lock_release(&frame_lock);
-
+    lock_release(&data->lock);
     return frame;
 }
 
 /* Returns a copy of shared page data. */
 struct shared_data *
-copy_shared_data(struct page *page) {
+copy_shared_data(struct page *page) 
+{
     /* Allocate shared data */
     struct shared_data *new_data = malloc(sizeof(struct shared_data));
     if (new_data == NULL) {
@@ -152,7 +136,7 @@ copy_shared_data(struct page *page) {
     new_data->read_bytes = page->data->read_bytes;
     new_data->writable = page->data->writable;
     new_data->is_mmap = page->data->is_mmap;
-    new_data->swap_slot = (size_t) -1;
+    new_data->swap_slot = BITMAP_ERROR;
     list_init(&new_data->pages);
     lock_init(&new_data->lock);
 
@@ -171,12 +155,15 @@ copy_shared_data(struct page *page) {
 
 /* Create a page structure. Add it to the current thread's SPT. */
 struct page *
-page_create(void *vaddr, bool writable) {
+page_create(void *vaddr, bool writable) 
+{
     struct page *p = page_alloc(vaddr, writable);
     if (p == NULL) {
         return NULL;
     }
     struct thread *cur = thread_current();
+
+    /* Insert the page into the supplemental page table. */
     if (!spt_insert(&cur->spt, p)) {
         free(p);
         return NULL;
@@ -186,7 +173,8 @@ page_create(void *vaddr, bool writable) {
 
 /* Allocate a page, returning the page. */
 struct page *
-page_alloc(void *vaddr, bool writable) {
+page_alloc(void *vaddr, bool writable) 
+{
     /* Allocate memory a new page struct. */
     struct page *p = malloc(sizeof(struct page));
     if (p == NULL) {
@@ -219,36 +207,10 @@ page_alloc(void *vaddr, bool writable) {
     return p;
 }
 
-/* Pins a collection of user pages (buffer) */
-// bool
-// pin_user_pages(void *buffer, size_t size) {
-//     void *upage = pg_round_down(buffer);
-//     void *end = buffer + size;
-
-//     while (upage < end) {
-//         if (!pin_frame(upage)) {
-//             return false;
-//         }
-//         upage += PGSIZE;
-//     }
-
-//     return true;
-// }
-
-// /* Unpins a collection of user pages (buffer) */
-// void
-// unpin_user_pages(void *buffer, size_t size) {
-//     void *upage = pg_round_down(buffer);
-//     void *end = buffer + size;
-
-//     while (upage < end) {
-//         unpin_frame(upage);
-//         upage += PGSIZE;
-//     }
-// }
-
+/* Checks if the user pages are writable. */
 bool
-check_user_pages_writable(void* buffer, size_t size) {
+check_user_pages_writable(void* buffer, size_t size) 
+{
     void *upage = pg_round_down(buffer);
     void *end = buffer + size;
     struct thread *cur = thread_current();

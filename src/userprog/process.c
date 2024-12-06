@@ -177,7 +177,7 @@ process_execute (const char *command)
         {
           struct page *p = hash_entry(hash_cur(&i), struct page, elem);
 
-          if (p->data->writable) {
+          if (p->data->writable || p->data->is_mmap) {
             continue;
           }
 
@@ -188,7 +188,9 @@ process_execute (const char *command)
           }
           
           /* Remove the new page from old data's list of pages */
+          lock_acquire(&p->data->lock);
           list_remove(&new_page->data_elem);
+          lock_release(&p->data->lock);
 
           /* Free the old data */
           free(new_page->data);
@@ -197,7 +199,9 @@ process_execute (const char *command)
           new_page->data = p->data;
 
           /* Add the new page to the new data's list of pages */
+          lock_acquire(&new_page->data->lock);
           list_push_back(&new_page->data->pages, &new_page->data_elem);
+          lock_release(&new_page->data->lock);
 
           /* Insert the new page into the child's SPT */
           spt_insert(&child_link->child->spt, new_page);
@@ -908,11 +912,9 @@ frame_alloc_stack(void *esp, void* faddr) {
 
   struct page *kpage;
 
-  /* Calculates current pages left until max stack size is reached. */
-  // int cur_pages_left = STACK_MAX_SIZE - ((uintptr_t)(PHYS_BASE - (uintptr_t)esp) / PGSIZE);
-
   /* New page if the fault address is within bounds of the stack and pages can still be created. */
-  if ((faddr >= esp || faddr == esp - 4 || faddr == esp - 32) && pg_round_down(faddr) >= PHYS_BASE - MAX_STACK_SIZE && faddr < PHYS_BASE) {
+  if ((faddr >= esp || faddr == esp - 4 || faddr == esp - 32) && 
+        pg_round_down(faddr) >= PHYS_BASE - MAX_STACK_SIZE && faddr < PHYS_BASE) {
 
     bool success = false;
 
@@ -922,8 +924,8 @@ frame_alloc_stack(void *esp, void* faddr) {
     if (pg_ofs(esp) == 0) {
       new_stack_addr = pg_round_down(esp - PGSIZE);
     }
-
-    kpage = page_alloc(new_stack_addr, true);
+    
+    kpage = page_create(new_stack_addr, true);
     // kpage->data->frame = frame_alloc(kpage->data);
     struct frame *frame = load_page(kpage);
     success = frame != NULL;

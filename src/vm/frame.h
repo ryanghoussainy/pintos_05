@@ -15,8 +15,6 @@
 struct frame {
     void *addr;                /* Address of the frame. */
     struct shared_data *data;  /* Page occupying this frame. */
-    // bool pinned;               /* Flag to indicate if the frame is pinned. */
-    // int age;                   /* Age of the frame for clock algorithm. */
     struct hash_elem elem;     /* List element for maintaining frame table as a linked list. */
 };
 

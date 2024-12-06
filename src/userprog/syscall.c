@@ -676,7 +676,10 @@ mmap_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED
   return mf_a->mapid < mf_b->mapid;
 }
 
-static bool check_any_mapped(void *start, void *stop) {
+/* Checks if any page in the given address range is already mapped. */
+static bool
+check_any_mapped(void *start, void *stop) 
+{
     ASSERT(start <= stop);
     struct thread *cur = thread_current();
 
