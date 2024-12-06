@@ -57,7 +57,7 @@ load_page(struct page *page) {
     struct shared_data *data = page->data;
 
     /* Obtain a frame to store the page */
-    struct frame *frame = frame_alloc(page);
+    struct frame *frame = frame_alloc(data);
     data->frame = frame;
     void *frame_addr = data->frame->addr;
     if (frame_addr == NULL) {

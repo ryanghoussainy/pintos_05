@@ -40,6 +40,7 @@ bool check_user_pages_writable(void* buffer, size_t size);
 
 struct shared_data *copy_shared_data(struct page *page);
 struct frame *load_page(struct page *p);
+struct shared_data *copy_shared_data(struct page *page);
 struct page *page_create(void *vaddr, bool writable);
 struct page *page_alloc(void *vaddr, bool writable);
 

@@ -42,7 +42,7 @@ static struct mapid_file *get_mmap_file_from_mapid(int mapid);
 static bool validate_user_pointer(const void *ptr);
 static uint32_t load_number_from_vaddr (void *vaddr);
 static char *load_address_from_vaddr (void *vaddr);
-static bool is_valid_user_address_range(const void *start, unsigned size);
+static bool is_valid_user_address_range(void *start, unsigned size);
 static bool check_any_mapped(void *start, void *stop);
 
 void
@@ -159,7 +159,7 @@ sys_write (struct intr_frame *f)
 {
   /* Loads the file descriptor, buffer and size from the stack. */
   int fd = load_number_from_vaddr(get_arg_1(f->esp));
-  const void *buffer = load_address_from_vaddr(get_arg_2(f->esp));
+  void *buffer = load_address_from_vaddr(get_arg_2(f->esp));
   unsigned size = load_number_from_vaddr(get_arg_3(f->esp));
 
   /* Checks if buffer is valid. */
@@ -543,7 +543,7 @@ munmap(int mapid)
 {
   /* Just call sys_munmap with the given mapid. */
   struct intr_frame f;
-  f.esp = (uint8_t *) &mapid - 4;
+  f.esp = (uint8_t *) &mapid - ARG_STEP;
   sys_munmap(&f);
 }
 
@@ -642,11 +642,19 @@ exit(int status)
 }
 
 /* Checks if the given address range is valid. */
-static bool is_valid_user_address_range(const void *start, unsigned size) {
-  const uint8_t *addr = (const uint8_t *)start;
+static bool is_valid_user_address_range(void *start, unsigned size) {
+  uint8_t *addr = start;
+  struct thread *cur = thread_current();
   for (unsigned i = 0; i < size; i++) {
-    if (!is_user_vaddr(addr) || pagedir_get_page(thread_current()->pagedir, addr) == NULL) {
+    if (!is_user_vaddr(addr)) {
       return false;
+    }
+    if (pagedir_get_page(cur->pagedir, addr) == NULL) {
+      // Check if the page can be loaded on demand (lazy loading)
+      struct page *page = spt_get(&cur->spt, addr);
+      if (page == NULL) {
+        return false;
+      }
     }
     addr++;
   }
@@ -683,7 +691,7 @@ static bool check_any_mapped(void *start, void *stop) {
         }
 
         /* Check if the page overlaps with the stack */
-        if (addr >= PHYS_BASE - 8388608 && addr < PHYS_BASE) {
+        if (addr >= PHYS_BASE - STACK_MAX_SIZE && addr < PHYS_BASE) {
             return true;
         }
     }
