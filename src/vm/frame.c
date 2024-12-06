@@ -29,7 +29,7 @@ frame_table_init(void) {
 
 /* Allocates a frame and adds it to the frame table. */
 struct frame *
-frame_alloc(struct page *page) {
+frame_alloc(struct shared_data *data) {
     struct frame *f;
 
     /* Allocate a frame. */
@@ -48,7 +48,7 @@ frame_alloc(struct page *page) {
             PANIC("Out of memory: frame allocation failed after eviction");
         }
 
-        f->data = page->data;
+        f->data = data;
         lock_release(&frame_lock);
         return f;
     }
@@ -76,7 +76,7 @@ frame_alloc(struct page *page) {
     frame->addr = faddr;
     
     // frame->pinned = false;
-    frame->data = page->data;
+    frame->data = data;
     lock_acquire(&frame_lock);
     hash_insert(&frame_table, &frame->elem);
     lock_release(&frame_lock);
@@ -264,7 +264,7 @@ frame_choose_victim(void) {
     int scanned = 0;
     
     /* Iterate through the frame table until a victim is found. */
-    while (scanned < 2 * frame_count) {
+    while (scanned < TWO_CHANCES * frame_count) {
         struct list pages = clock_hand->data->pages;
         bool none_accessed = true;
 
@@ -407,22 +407,4 @@ frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSE
     const struct frame *f_a = hash_entry(a, struct frame, elem);
     const struct frame *f_b = hash_entry(b, struct frame, elem);
     return f_a->addr < f_b->addr;
-}
-
-static struct frame *
-next_frame(struct frame *current) 
-{
-    struct hash_iterator i;
-    hash_first(&i, &frame_table);
-    struct frame *f = hash_entry(hash_cur(&i), struct frame, elem);
-    while (f != current) {
-        struct hash_elem *next = hash_next(&i);
-        if (next == NULL) {
-            hash_first(&i, &frame_table);
-            f = hash_entry(hash_cur(&i), struct frame, elem);
-        } else {
-            f = hash_entry(next, struct frame, elem);
-        }
-    }
-    return f;
 }

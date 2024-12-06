@@ -157,9 +157,9 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
    /* Check if filesys lock is held by current thread. */
-  if (lock_held_by_current_thread(&filesys_lock)) {
-      goto page_fault;
-  }
+//   if (lock_held_by_current_thread(&filesys_lock)) {
+//       goto page_fault;
+//   }
 
    /* If the fault address appears to be in stack range then grow,
       otherwise continue. */

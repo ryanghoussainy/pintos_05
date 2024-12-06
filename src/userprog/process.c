@@ -184,7 +184,7 @@ process_execute (const char *command)
           }
           
           /* Remove the new page from old data's list of pages */
-          list_remove(&new_page->data_elem);
+          // list_remove(&new_page->data_elem);
 
           /* Free the old data */
           free(new_page->data);
@@ -193,7 +193,7 @@ process_execute (const char *command)
           new_page->data = p->data;
 
           /* Add the new page to the new data's list of pages */
-          list_push_back(&new_page->data->pages, &new_page->data_elem);
+          // list_push_back(&new_page->data->pages, &new_page->data_elem);
 
           /* Set shared data to read-only */
           p->data->writable = false;
@@ -835,7 +835,7 @@ setup_stack (void **esp, char **argv, int argc)
   kpage = page_create(uaddr, true);
 
   /* Allocate a frame for the page since first page in stack is not lazy loaded. */
-  kpage->data->frame = frame_alloc(kpage);
+  kpage->data->frame = frame_alloc(kpage->data);
   if (kpage != NULL && kpage->data->frame != NULL) 
     {
       success = install_page (uaddr, kpage->data->frame->addr, true);
@@ -921,7 +921,7 @@ frame_alloc_stack(void *esp, void* faddr) {
     }
 
     kpage = page_alloc(new_stack_addr, true);
-    kpage->data->frame = frame_alloc(kpage);
+    kpage->data->frame = frame_alloc(kpage->data);
 
     if (kpage != NULL && kpage->data->frame != NULL) {
 
