@@ -184,7 +184,7 @@ process_execute (const char *command)
           }
           
           /* Remove the new page from old data's list of pages */
-          // list_remove(&new_page->data_elem);
+          list_remove(&new_page->data_elem);
 
           /* Free the old data */
           free(new_page->data);
@@ -193,7 +193,7 @@ process_execute (const char *command)
           new_page->data = p->data;
 
           /* Add the new page to the new data's list of pages */
-          // list_push_back(&new_page->data->pages, &new_page->data_elem);
+          list_push_back(&new_page->data->pages, &new_page->data_elem);
 
           /* Insert the new page into the child's SPT */
           spt_insert(&child_link->child->spt, new_page);
@@ -754,6 +754,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          We will read PAGE_READ_BYTES bytes from FILE
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       // /* Get the thread that is executing the same executable file. */
       // struct thread *t = thread_get_by_exec_file(file);
@@ -811,6 +812,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Advance. */
       read_bytes -= page_read_bytes;
+      zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
       ofs += page_read_bytes;
     }
@@ -830,10 +832,12 @@ setup_stack (void **esp, char **argv, int argc)
   kpage = page_create(uaddr, true);
 
   /* Allocate a frame for the page since first page in stack is not lazy loaded. */
-  kpage->data->frame = frame_alloc(kpage->data);
+  // kpage->data->frame = frame_alloc(kpage->data);
+  struct frame *frame = load_page(kpage);
+  success = frame != NULL;
   if (kpage != NULL && kpage->data->frame != NULL) 
     {
-      success = install_page (uaddr, kpage->data->frame->addr, true);
+      // success = install_page (uaddr, kpage->data->frame->addr, true);
       if (success)
         {
           /* Start at the bottom of the stack */
@@ -901,10 +905,10 @@ frame_alloc_stack(void *esp, void* faddr) {
   struct page *kpage;
 
   /* Calculates current pages left until max stack size is reached. */
-  int cur_pages_left = STACK_MAX_SIZE - ((uintptr_t)(PHYS_BASE - (uintptr_t)esp) / PGSIZE);
+  // int cur_pages_left = STACK_MAX_SIZE - ((uintptr_t)(PHYS_BASE - (uintptr_t)esp) / PGSIZE);
 
   /* New page if the fault address is within bounds of the stack and pages can still be created. */
-  if (faddr <= esp && faddr > (PHYS_BASE - (STACK_MAX_SIZE * PGSIZE)) && cur_pages_left > 0) {
+  if ((faddr >= esp || faddr == esp - 4 || faddr == esp - 32) && pg_round_down(faddr) >= PHYS_BASE - MAX_STACK_SIZE && faddr < PHYS_BASE) {
 
     bool success = false;
 
@@ -916,11 +920,13 @@ frame_alloc_stack(void *esp, void* faddr) {
     }
 
     kpage = page_alloc(new_stack_addr, true);
-    kpage->data->frame = frame_alloc(kpage->data);
+    // kpage->data->frame = frame_alloc(kpage->data);
+    struct frame *frame = load_page(kpage);
+    success = frame != NULL;
 
     if (kpage != NULL && kpage->data->frame != NULL) {
 
-      success = install_page (new_stack_addr, kpage->data->frame->addr, true);
+      // success = install_page (new_stack_addr, kpage->data->frame->addr, true);
 
       if (!success) {
         frame_free(kpage->data->frame);

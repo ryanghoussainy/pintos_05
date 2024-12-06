@@ -14,7 +14,6 @@ static struct frame *frame_choose_victim(void);
 static bool lock_frame(struct frame *frame);
 static unsigned frame_hash(const struct hash_elem *elem, void *aux UNUSED);
 static bool frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
-static struct frame *next_frame(struct frame *current);
 
 struct hash_iterator i;
 
@@ -256,8 +255,10 @@ frame_choose_victim(void) {
     /* If the clock hand is NULL, start from the beginning of the frame table. */
     if (clock_hand == NULL) {
         hash_first(&i, &frame_table);
-        hash_next(&i);
-        clock_hand = hash_entry(hash_cur(&i), struct frame, elem);
+        while (clock_hand == NULL) {
+            hash_next(&i);
+            clock_hand = hash_entry(hash_cur(&i), struct frame, elem);
+        }
     }
 
     int frame_count = hash_size(&frame_table);
@@ -271,6 +272,7 @@ frame_choose_victim(void) {
         struct list_elem *e;
         for (e = list_begin(&pages); e != list_end(&pages); e = list_next(e)) {
             struct page *page = list_entry(e, struct page, data_elem);
+            printf("page: %p\n", page->vaddr);
             if (pagedir_is_accessed(page->owner->pagedir, page->vaddr)) {
                 pagedir_set_accessed(page->owner->pagedir, page->vaddr, false);
                 none_accessed = false;

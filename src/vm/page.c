@@ -72,6 +72,9 @@ load_page(struct page *page) {
     /* Check if the current thread holds the file system lock */
     bool cur_holds_filesys = lock_held_by_current_thread(&filesys_lock);
 
+    // // Zero out the page
+    // memset(frame_addr, 0, PGSIZE);
+
     /* Load the page into the frame */
     if (data->swapped) {
         swap_in(frame_addr, data->swap_slot);
@@ -99,6 +102,17 @@ load_page(struct page *page) {
         memset(frame_addr + data->read_bytes, 0, PGSIZE - data->read_bytes);
     } else {
         memset(frame_addr, 0, PGSIZE);
+    }
+
+    /* Install the page into the frame for each page in data */
+    struct list_elem *elem;
+    for (elem = list_begin (&data->pages); elem != list_end (&data->pages); elem = list_next (elem))
+    {
+        struct page *page = list_entry (elem, struct page, data_elem);
+        if (!install_page(page->vaddr, frame_addr, page->data->writable)) {
+            frame_free(data->frame);
+            return NULL;
+        }
     }
 
     /* Pin the frame. */
