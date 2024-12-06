@@ -256,6 +256,7 @@ frame_choose_victim(void) {
     /* If the clock hand is NULL, start from the beginning of the frame table. */
     if (clock_hand == NULL) {
         hash_first(&i, &frame_table);
+        hash_next(&i);
         clock_hand = hash_entry(hash_cur(&i), struct frame, elem);
     }
 
@@ -283,7 +284,12 @@ frame_choose_victim(void) {
         }
 
         
-        clock_hand = next_frame(clock_hand);
+        if (!hash_next(&i)) {
+            hash_first(&i, &frame_table);
+            hash_next(&i);
+        }
+        clock_hand = hash_entry(hash_cur(&i), struct frame, elem);
+
         scanned++;
         continue;
         
@@ -306,7 +312,12 @@ frame_choose_victim(void) {
         PANIC("Failed to find a victim frame during eviction");
     }
 
-    clock_hand = next_frame(clock_hand); 
+    if (!hash_next(&i)) {
+            hash_first(&i, &frame_table);
+            hash_next(&i);
+    }
+    clock_hand = hash_entry(hash_cur(&i), struct frame, elem);
+ 
     return victim;
     
 
