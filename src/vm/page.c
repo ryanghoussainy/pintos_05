@@ -241,7 +241,7 @@ check_user_pages_writable(void* buffer, size_t size) {
 
     while (upage < end) {
         struct page *page = spt_get(&cur->spt, upage);
-        if (page == NULL || !page->data->writable) {
+        if (page != NULL && !page->data->writable) {
             return false;
         }
         upage += PGSIZE;

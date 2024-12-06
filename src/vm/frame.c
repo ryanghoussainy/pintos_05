@@ -401,11 +401,18 @@ frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSE
 static struct frame *
 next_frame(struct frame *current) 
 {
-    struct hash_elem *next_elem = hash_next(&current->elem);
-    if (!next_elem) {
-        // Wrap around if at the end of the hash table.
-        hash_first(&i, &frame_table);
-        next_elem = hash_next(&i);
+    // Have to use an iterator to get the next frame after current
+    struct hash_iterator i;
+    hash_first(&i, &frame_table);
+    struct frame *f = hash_entry(hash_cur(&i), struct frame, elem);
+    while (f != current) {
+        struct hash_elem *next = hash_next(&i);
+        if (next == NULL) {
+            hash_first(&i, &frame_table);
+            f = hash_entry(hash_cur(&i), struct frame, elem);
+        } else {
+            f = hash_entry(next, struct frame, elem);
+        }
     }
-    return hash_entry(next_elem, struct frame, elem);
+    return f;   
 }
