@@ -172,18 +172,18 @@ page_fault (struct intr_frame *f)
   struct page *found_page = spt_get(&cur->spt, fault_addr);
   if (found_page) {
       /* If we are trying to write to a read-only shared page, we need to copy the shared page structure. */
-      if (write && found_page->data->writable && list_size(&found_page->data->pages) > 1) {
-            /* Allocate a new shared page data for the page. */
-            struct shared_data *new_data = copy_shared_data(found_page);
-            if (new_data == NULL) {
-                goto page_fault;
-            }
+      // if (write && found_page->data->writable && list_size(&found_page->data->pages) > 1) {
+      //       /* Allocate a new shared page data for the page. */
+      //       struct shared_data *new_data = copy_shared_data(found_page);
+      //       if (new_data == NULL) {
+      //           goto page_fault;
+      //       }
 
-            /* Point the page to the new shared data. */
-            found_page->data = new_data;
+      //       /* Point the page to the new shared data. */
+      //       found_page->data = new_data;
             
-            return;
-      }
+      //       return;
+      // }
 
       /* Allocate a new frame for the page. */
       struct frame *frame = load_page(found_page);

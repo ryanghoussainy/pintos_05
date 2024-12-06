@@ -177,6 +177,10 @@ process_execute (const char *command)
         {
           struct page *p = hash_entry(hash_cur(&i), struct page, elem);
 
+          if (p->data->writable) {
+            continue;
+          }
+
           /* Allocate a page */
           struct page *new_page = page_alloc(p->vaddr, p->data->writable);
           if (new_page == NULL) {
