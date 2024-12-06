@@ -691,7 +691,7 @@ static bool check_any_mapped(void *start, void *stop) {
         }
 
         /* Check if the page overlaps with the stack */
-        if (addr >= PHYS_BASE - STACK_MAX_SIZE && addr < PHYS_BASE) {
+        if (addr >= PHYS_BASE - MAX_STACK_SIZE && addr < PHYS_BASE) {
             return true;
         }
     }

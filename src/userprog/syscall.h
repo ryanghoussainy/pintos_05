@@ -19,7 +19,7 @@
 #define RETURN_ERR (-1)
 
 /* Max stack size which is 8MB. */
-#define STACK_MAX_SIZE 8388608
+#define MAX_STACK_SIZE 8388608
 
 /* Lock used when handling accessing the file system to ensure synchronisation. */
 struct lock filesys_lock;

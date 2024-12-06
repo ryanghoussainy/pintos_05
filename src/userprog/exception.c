@@ -156,11 +156,6 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-   /* Check if filesys lock is held by current thread. */
-//   if (lock_held_by_current_thread(&filesys_lock)) {
-//       goto page_fault;
-//   }
-
    /* If the fault address appears to be in stack range then grow,
       otherwise continue. */
   if (frame_alloc_stack(f->esp, fault_addr)) {
@@ -177,7 +172,7 @@ page_fault (struct intr_frame *f)
   struct page *found_page = spt_get(&cur->spt, fault_addr);
   if (found_page) {
       /* If we are trying to write to a read-only shared page, we need to copy the shared page structure. */
-      if (write && !found_page->data->writable && found_page->data->file != NULL) {
+      if (write && found_page->data->writable && found_page->data->file != NULL && list_size(&found_page->data->pages) > 1) {
             /* Allocate a new shared page data for the page. */
             struct shared_data *new_data = copy_shared_data(found_page);
             if (new_data == NULL) {
@@ -186,9 +181,6 @@ page_fault (struct intr_frame *f)
 
             /* Point the page to the new shared data. */
             found_page->data = new_data;
-
-            /* Set the new page to writable. */
-            found_page->data->writable = true;
             
             return;
       }
@@ -220,13 +212,4 @@ page_fault:
           write ? "writing" : "reading",
           user ? "user" : "kernel");
   kill (f);
-
-  /* If fault occurred in user mode, terminate the process. */
-   if (user) {
-      thread_current()->exit_status = -1;
-      kill(f);
-   } else {
-      PANIC("Page fault in kernel mode");
-   }
-
 }

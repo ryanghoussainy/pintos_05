@@ -14,7 +14,6 @@ static struct frame *frame_choose_victim(void);
 static bool lock_frame(struct frame *frame);
 static unsigned frame_hash(const struct hash_elem *elem, void *aux UNUSED);
 static bool frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
-static struct frame *next_frame(struct frame *current);
 
 struct hash_iterator i;
 

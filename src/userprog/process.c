@@ -184,7 +184,7 @@ process_execute (const char *command)
           }
           
           /* Remove the new page from old data's list of pages */
-          // list_remove(&new_page->data_elem);
+          list_remove(&new_page->data_elem);
 
           /* Free the old data */
           free(new_page->data);
@@ -193,10 +193,7 @@ process_execute (const char *command)
           new_page->data = p->data;
 
           /* Add the new page to the new data's list of pages */
-          // list_push_back(&new_page->data->pages, &new_page->data_elem);
-
-          /* Set shared data to read-only */
-          p->data->writable = false;
+          list_push_back(&new_page->data->pages, &new_page->data_elem);
 
           /* Insert the new page into the child's SPT */
           spt_insert(&child_link->child->spt, new_page);
