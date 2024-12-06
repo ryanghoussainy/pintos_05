@@ -177,9 +177,13 @@ process_execute (const char *command)
         {
           struct page *p = hash_entry(hash_cur(&i), struct page, elem);
 
+          lock_acquire(&p->data->lock);
+
           if (p->data->writable || p->data->is_mmap) {
+            lock_release(&p->data->lock);
             continue;
           }
+          lock_release(&p->data->lock);
 
           /* Allocate a page */
           struct page *new_page = page_alloc(p->vaddr, p->data->writable);
@@ -377,11 +381,17 @@ process_exit (void)
   while (hash_next(&j))
   {
     struct page *p = hash_entry(hash_cur(&j), struct page, elem);
+    bool cur_holds_data_lock = lock_held_by_current_thread(&p->data->lock);
+    if (!cur_holds_data_lock)
+      lock_acquire(&p->data->lock);
+
     if (p->data->swap_slot != BITMAP_ERROR)
       {
         swap_drop(p->data->swap_slot);
         p->data->swap_slot = BITMAP_ERROR;
       }
+    if (!cur_holds_data_lock)
+      lock_release(&p->data->lock);
   }
 
   /* Free hash table and containing data */
@@ -749,9 +759,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (page == NULL) {
         return false;
       }
+      lock_acquire(&page->data->lock);
       page->data->file = file;
       page->data->offset = ofs;
       page->data->read_bytes = page_read_bytes;
+      lock_release(&page->data->lock);
 
       /* Advance. */
       read_bytes -= page_read_bytes;

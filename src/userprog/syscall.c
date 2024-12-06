@@ -372,7 +372,7 @@ sys_read (struct intr_frame *f)
       exit(-1);
     }
     int read_characters = file_read(opened_file->file, buffer, size);
-    
+
     lock_release(&filesys_lock);
 
     f->eax = read_characters;
@@ -506,10 +506,12 @@ sys_mmap (struct intr_frame *f)
       struct page *page = page_create(vaddr + offset, true);
       struct shared_data *data = page->data;
       page->vaddr = addr + offset;
+      lock_acquire(&data->lock);
       data->is_mmap = true;
       data->file = file;
       data->offset = offset;
       data->read_bytes = page_read_bytes;
+      lock_release(&data->lock);
       offset += PGSIZE;
       remaining_bytes -= page_read_bytes;
   }
@@ -560,6 +562,7 @@ sys_munmap (struct intr_frame *f)
   while (hash_next(&i)) {
       struct page *p = hash_entry(hash_cur(&i), struct page, elem);
       struct shared_data *data = p->data;
+      lock_acquire(&data->lock);
       if (data->file == file && data->is_mmap) {
           if (pagedir_is_dirty(cur->pagedir, p->vaddr)) {
               lock_acquire(&filesys_lock);
@@ -568,6 +571,7 @@ sys_munmap (struct intr_frame *f)
           }
           pagedir_clear_page(cur->pagedir, p->vaddr);
       }
+      lock_release(&data->lock);
   }
 
   /* Remove the memory mapped file from the hash table. */
